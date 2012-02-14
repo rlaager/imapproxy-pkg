@@ -1,0 +1,16 @@
+#!/usr/bin/perl -w
+use strict;
+
+my %params = (
+	proc_username => "nobody",
+	proc_groupname => "nogroup",
+	chroot_directory => "/var/lib/imapproxy/chroot"
+);
+
+
+while (<>)
+{
+	my ($key) = m/^#?(\w+)/;
+	if ( defined $key and exists $params{$key} ) { print "$key $params{$key}\n"; }
+	else { print $_; }
+}

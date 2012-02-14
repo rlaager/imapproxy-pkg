@@ -1,0 +1,14 @@
+Index: up-imapproxy-1.2.7rc2/src/select.c
+===================================================================
+--- up-imapproxy-1.2.7rc2.orig/src/select.c	2009-10-16 02:44:49.000000000 +0200
++++ up-imapproxy-1.2.7rc2/src/select.c	2009-10-16 02:47:20.000000000 +0200
+@@ -349,7 +349,8 @@
+     {
+ 	if ( Server->LiteralBytesRemaining )
+ 	{
+-	    syslog( LOG_ERR, "%s: Server response to SELECT command contains unexpected literal data on sd [%d].", fn );
++	    syslog( LOG_ERR, "%s: Server response to SELECT command contains unexpected literal data on sd [%d].",
++	        fn, Server->conn );
+ 	    /*
+ 	     * Must eat the literal.
+ 	     */

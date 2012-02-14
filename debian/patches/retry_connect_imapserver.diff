@@ -1,0 +1,142 @@
+Index: up-imapproxy-1.2.7rc2/include/imapproxy.h
+===================================================================
+--- up-imapproxy-1.2.7rc2.orig/include/imapproxy.h	2009-10-16 02:48:18.000000000 +0200
++++ up-imapproxy-1.2.7rc2/include/imapproxy.h	2009-10-16 12:48:04.000000000 +0200
+@@ -279,6 +279,8 @@
+     char *listen_addr;                        /* address we bind to */
+     char *server_hostname;                    /* server we proxy to */
+     char *server_port;                        /* port we proxy to */
++    unsigned int server_connect_retries;      /* connect retries to IMAP server */
++    unsigned int server_connect_delay;	      /* delay between connection retry rounds */
+     unsigned int cache_size;                  /* number of cache slots */
+     unsigned int cache_expiration_time;       /* cache exp time in seconds */
+     unsigned int send_tcp_keepalives;         /* flag to send keepalives */
+Index: up-imapproxy-1.2.7rc2/scripts/imapproxy.conf
+===================================================================
+--- up-imapproxy-1.2.7rc2.orig/scripts/imapproxy.conf	2009-10-16 02:48:18.000000000 +0200
++++ up-imapproxy-1.2.7rc2/scripts/imapproxy.conf	2009-10-16 02:48:27.000000000 +0200
+@@ -15,6 +15,15 @@
+ 
+ 
+ #
++## connect_retries
++##
++## This setting controls how many times we retry connecting to our server.
++## The delay between retries is configurable with 'connect_delay'
++#
++connect_retries 10
++connect_delay 5
++
++#
+ ## cache_size
+ ##
+ ## This setting determines how many in-core imap connection structures
+Index: up-imapproxy-1.2.7rc2/src/config.c
+===================================================================
+--- up-imapproxy-1.2.7rc2.orig/src/config.c	2009-10-16 02:48:18.000000000 +0200
++++ up-imapproxy-1.2.7rc2/src/config.c	2009-10-16 12:48:04.000000000 +0200
+@@ -372,6 +372,11 @@
+     ADD_TO_TABLE( "server_port", SetStringValue, 
+ 		  &PC_Struct.server_port, index );
+ 
++    ADD_TO_TABLE( "connect_retries", SetNumericValue,
++		  &PC_Struct.server_connect_retries, index );
++    ADD_TO_TABLE( "connect_delay", SetNumericValue,
++		  &PC_Struct.server_connect_delay, index );
++
+     ADD_TO_TABLE( "cache_size", SetNumericValue, 
+ 		  &PC_Struct.cache_size, index );
+ 
+Index: up-imapproxy-1.2.7rc2/src/main.c
+===================================================================
+--- up-imapproxy-1.2.7rc2.orig/src/main.c	2009-10-16 02:48:27.000000000 +0200
++++ up-imapproxy-1.2.7rc2/src/main.c	2009-10-16 12:49:32.000000000 +0200
+@@ -276,6 +276,7 @@
+ static int ParseBannerAndCapability( char *, unsigned int,
+ 				      char *, unsigned int, unsigned int );
+ static void ServerInit( void );
++static int TestServerAlive( struct addrinfo *ai );
+ static void Daemonize( const char* );
+ static void Usage( void );
+ 
+@@ -737,10 +738,10 @@
+ {
+     char *fn = "ServerInit()";
+     struct rlimit rl;
+-    int rc;
++    int rc, retry;
+     struct passwd *pw;
+     struct addrinfo aihints, *ai;
+-    int gaierrnum, sd;
++    int gaierrnum;
+ 
+     
+     /* open the global trace file and make proc_username own it */
+@@ -820,18 +821,27 @@
+     /* 
+      * fill in the address family, the host address, and the
+      * service port of our global socket address structure
++     * Try to connect at least once (<=) before giving up
+      */
+     ISD.airesults = ai;
+     ISD.srv = NULL;
+-    for ( ; ai != NULL; ai = ai->ai_next )
++    for ( retry=0; retry <= PC_Struct.server_connect_retries && NULL == ISD.srv; retry++ )
+     {
+-        if ( ( sd = socket( ai->ai_family, ai->ai_socktype, ai->ai_protocol ) )
+-	     < 0 ) continue;
+-	if ( connect( sd, (struct sockaddr *)ai->ai_addr, ai->ai_addrlen ) )
+-		continue;
+-	close( sd );
+-	ISD.srv = ai;
+-	break;
++        ai = ISD.airesults;
++        for ( ; ai != NULL; ai = ai->ai_next )
++        {
++            if( ! TestServerAlive(ai) )
++            {	/* connect to server succeeded */
++                ISD.srv = ai;
++                break;
++            }
++	}
++	if( ISD.srv )
++	    break;
++        
++	syslog( LOG_INFO, "%s: Connection to server failed. Sleeping %d seconds to retry...", fn,
++	    PC_Struct.server_connect_delay);
++	sleep( PC_Struct.server_connect_delay );
+     }
+     if ( ai == NULL )
+     {
+@@ -840,6 +850,31 @@
+     }
+ }
+ 
++/*++
++ * Function:   TestServerAlive
++ *
++ * Purpose:    Attempt connecting to server
++ *
++ * Parameters: ai -- addrinfo corresponding to resolved server address
++ *
++ * Returns:    0 upon successful connection
++ *
++ * Authors:    Jose Luis Tallon <jltallon@adv-solutions.net>
++ *
++ */
++int TestServerAlive(struct addrinfo *ai)
++{
++ int sd=-1;
++ 
++     if( ( sd=socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol) ) < 0 )
++         return -1;	/* could not create socket */
++
++     if( connect(sd, (struct sockaddr *)ai->ai_addr, ai->ai_addrlen) )
++         return -1;	/* could not connect socket */
++
++     close( sd );
++     return 0;
++}
+ 
+ /*++
+  * Function:   Daemonize

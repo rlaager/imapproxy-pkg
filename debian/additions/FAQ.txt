@@ -1,0 +1,60 @@
+*  What is the imapproxy?
+
+The name says almost all you need to know. It proxies IMAP transactions
+between an IMAP client and an IMAP server. The general idea is that the 
+client should never know that it's not talking to the real IMAP server. 
+The only thing that makes this a slightly unique Imap Proxy server is 
+that it caches server connections.
+
+
+*  Why was imapproxy written in the first place?
+
+imapproxy was written to compensate for webmail clients that are unable 
+to maintain persistent connections to an IMAP server. Most webmail 
+clients need to log in to an IMAP server for nearly every single 
+transaction. This behaviour can cause tragic performance problems on 
+the IMAP server. imapproxy tries to deal with this problem by leaving 
+server connections open for a short time after a webmail client logs out. 
+When the webmail client connects again, imapproxy will determine if 
+there's a cached connection available and reuse it if possible.
+
+
+*  How does imapproxy keep track of which server connection is for which user?
+
+Upon the first successful login to the real IMAP server (through the proxy), 
+imapproxy fills in a little record that contains the username, an MD5 
+digital signature of the password and the server socket descriptor that's 
+being used. After you log out and then log back in again, imapproxy just 
+has to find a record that matches your username and password. 
+These records are stored in a hash table (with the username being the hash key) 
+in memory, so the lookups are pretty fast.
+
+
+*  I set the cache expiration time for 5 minutes, but looking at my logs 
+I noticed that connections are taking longer than 5 minutes to expire. 
+Is this a bug?
+
+This isn't a bug. Each time a client logs out of imapproxy, the real server 
+connection is left open and the logout time is stored in a record 
+corresponding to the connection. Every 60 seconds, a thread wakes up 
+and expires every connection that's been logged out at least 
+cache_expiration_time seconds. If your cache expiration time is set 
+to 5 minutes, a cached connection could potentially not be expired for 
+nearly 6 minutes.
+
+
+*  What platforms will imapproxy run on?
+
+So far it's been tested on Solaris 8, Solaris 9, RedHat 7.3, RedHat 9, 
+IRIX 6.5 and FreeBSD 5.0. With some manual tweaking, it's known to run 
+on older versions of FreeBSD and Mac OS X. If you're running it on a 
+platform not listed here, let us know and we'll update this list.
+
+
+*  Is this the Horde Imap Proxy?
+
+No. You can find information about the Horde Imap Proxy at 
+http://www.horde.org/imapproxy. This one is the Imap Proxy commonly known 
+as up-imapproxy. They're two totally different Imap Proxy servers. 
+I just shortened the name from up-imapproxy to imapproxy when I 
+registered the domain. I thought www.upimapproxy.org looked pretty stupid.

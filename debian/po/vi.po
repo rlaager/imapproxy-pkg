@@ -1,0 +1,34 @@
+# Vietnamese translation for UP-IMAP Proxy.
+# Copyright © 2008 Free Software Foundation, Inc.
+# Clytie Siddall <clytie@riverland.net.au>, 2005-2008.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: up-imapproxy 1.2.6-1.1\n"
+"Report-Msgid-Bugs-To: up-imapproxy@packages.debian.org\n"
+"POT-Creation-Date: 2012-02-05 08:29+0100\n"
+"PO-Revision-Date: 2008-06-11 16:48+0930\n"
+"Last-Translator: Clytie Siddall <clytie@riverland.net.au>\n"
+"Language-Team: Vietnamese <vi-VN@googlegroups.com>\n"
+"Language: vi\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"X-Generator: LocFactoryEditor 1.7b3\n"
+
+#. Type: string
+#. Description
+#: ../templates:1001
+msgid "IMAP server to connect to:"
+msgstr "Máy phục vụ IMAP tới đó cần kết nối:"
+
+#. Type: string
+#. Description
+#: ../templates:1001
+msgid ""
+"Please enter the hostname or address of the IMAP server ImapProxy will "
+"connect to."
+msgstr ""
+"Hãy nhập tên máy hoặc địa chỉ của máy phục vụ IMAP tới đó trình ImapProxy sẽ "
+"kết nối."

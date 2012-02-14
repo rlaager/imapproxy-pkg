@@ -1,0 +1,25 @@
+Source: up-imapproxy
+Section: mail
+Priority: optional
+Maintainer: Jose Luis Tallon <jltallon@adv-solutions.net>
+Build-Depends: autotools-dev, debhelper (>= 5), quilt, po-debconf (>= 0.8.2), 
+	libwrap0-dev, libncurses-dev, libssl-dev
+Homepage: http://www.imapproxy.org
+Standards-Version: 3.8.4
+
+Package: imapproxy
+Architecture: any
+Depends: lsb-base, ${shlibs:Depends}, ${misc:Depends}, ucf (>= 0.28)
+Description: IMAP protocol proxy
+ UP-ImapProxy proxies IMAP transactions between an IMAP client and an IMAP
+ server. The general idea is that the client should never know that it is
+ not talking to the real IMAP server, but ImapProxy caches server connections.
+ .
+ ImapProxy was written to compensate for webmail clients that are unable  to
+ maintain persistent connections to an IMAP server. Most webmail clients
+ need to log in to an IMAP server for nearly every single transaction; This
+ behaviour can cause tragic performance problems on the IMAP server.
+ ImapProxy tries to deal with this problem by leaving server connections
+ open for a short time after a webmail client logs out. When the webmail client
+ connects again, ImapProxy will determine if there is a cached connection
+ available and reuse it if possible.

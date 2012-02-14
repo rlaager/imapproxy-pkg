@@ -1,0 +1,8 @@
+etc
+etc/default
+usr/sbin
+var/lib/imapproxy/chroot
+usr/share/imapproxy
+usr/share/doc/imapproxy
+usr/share/doc/imapproxy/examples
+var/run

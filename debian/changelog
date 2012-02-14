@@ -1,0 +1,347 @@
+up-imapproxy (1.2.7-1.1) unstable; urgency=low
+
+  * Non-maintainer upload.
+  * Fix pending l10n issues. Debconf translations:
+    - Danish (Joe Hansen).  Closes: #628222
+    - Dutch; (Jeroen Schot).  Closes: #656624
+    - Polish (Michał Kułach).  Closes: #658741
+
+ -- Christian Perrier <bubulle@debian.org>  Tue, 14 Feb 2012 07:22:23 +0100
+
+up-imapproxy (1.2.7-1) unstable; urgency=low
+
+  * New upstream version (identical to previous)
+
+  * Packaging
+    - update to S-V 3.8.4 with no changes
+    - fix last lintian warnings
+
+ -- Jose Luis Tallon <jltallon@adv-solutions.net>  Sun, 21 Feb 2010 14:01:09 +0100
+
+up-imapproxy (1.2.7~rc3-2) unstable; urgency=low
+
+  * Fix pending l10n issues. Integrate patch from Christian Perrier
+     Debconf translations (Closes: #536742)
+     - Spanish (Francisco Javier Cuadrado).  Closes: #536742
+     - Russian (Yuri Kozlov).  Closes: #543195
+     - Italian (Vincenzo Campanella).  Closes: #569130
+     - Slovak (Ivan Masar). Closes: #570285
+
+ -- Jose Luis Tallon <jltallon@adv-solutions.net>  Sat, 20 Feb 2010 15:04:17 +0100
+
+up-imapproxy (1.2.7~rc3-1) unstable; urgency=high
+
+  * New upstream version
+
+  * Upgraded packaging
+    - Converted to "source format 3.0 (quilt)"
+    - Upgrade to S-V 3.8.3 with no changes
+
+  * Wait for IMAP server to become available on startup (Closes: #517331)
+    - Based on a suggestion by Roman Medina-Heigl
+
+ -- Jose Luis Tallon <jltallon@adv-solutions.net>  Fri, 16 Oct 2009 00:41:32 +0200
+
+up-imapproxy (1.2.6-5) unstable; urgency=high
+
+  * Don't overwrite the config file on upgrades. (Closes: #510432)
+    - Urgency=high since we are fixing an RC after the freeze
+    - Included patch from Niko Tyni. Many thanks!!
+    - Now depends on ucf (>= 0.28)
+
+ -- Jose Luis Tallon <jltallon@adv-solutions.net>  Fri,  6 Feb 2009 21:27:19 +0100
+
+up-imapproxy (1.2.6-4) unstable; urgency=medium
+
+  * 'postinst' script: configuration file processing
+    - Fix typo which would truncate existing config file (Closes: #487761)
+
+  * Packaging enhancement: remove all files created during installation
+    (postinst), but leave alone any user-created files unless purging
+
+ -- Jose Luis Tallon <jltallon@adv-solutions.net>  Wed, 25 Jun 2008 02:18:37 +0200
+
+up-imapproxy (1.2.6-3) unstable; urgency=low
+
+  * postinst script: configuration file processing
+    - PERL 5.10 introduces an incompatibility affecting cfg file creation
+    - Updated the relevant script to work properly under this version
+
+ -- Jose Luis Tallon <jltallon@adv-solutions.net>  Sun, 22 Jun 2008 23:03:20 +0200
+
+up-imapproxy (1.2.6-2) unstable; urgency=low
+
+  * Packaging
+    - Updated to Standards-Version 3.8.0 with no changes: 
+        Homepage control field was already there
+        we unfortunately do not support "parallel=<n>" builds.
+    - Minor fix to debian/rules to clean stale 'stamp-h' file
+
+  * Configuration
+    - Changed local listen port when configured to bind to localhost
+      (default) -- fixes new behaviour in 1.2.5 (Closes: #470431)
+    - By default, copy etc/localtime to chroot directory (Closes: #436555)
+
+  * Licensing et al.
+    - Updated debian/copyright wrt OpenSSL exception (Closes: #400454)
+      Upstream has been requested to document it themselves.
+
+  * Localization
+    - Included russian translation (ru.po) (Closes: #452298)
+    - Re-included portuguese translation, which got misplaced sometime
+      after 1.2.4-5 (Closes: #452298)
+    - Galician (Closes: #485488)
+    - Vietnamese (Closes: #485743)
+    - Basque [euskera] (Closes: #486161)
+    - Turkish (Closes: #486533)
+
+ -- Jose Luis Tallon <jltallon@adv-solutions.net>  Tue, 17 Jun 2008 00:59:55 +0200
+
+up-imapproxy (1.2.6-1) unstable; urgency=low
+
+  * New upstream version
+    - Upstream included all debian-specific patches
+
+  * Build process
+    - Updated to Standards-Version 3.7.3
+    - Updated build dependencies
+    - "As needed" linking
+
+ -- Jose Luis Tallon <jltallon@adv-solutions.net>  Mon,  4 Feb 2008 23:49:37 +0100
+
+up-imapproxy (1.2.4-10.2) unstable; urgency=low
+
+  * Non-maintainer upload to fix RC bug.
+  * Changed libwrap-dev Build-Dep to libwrap0-dev. (Closes: #436314)
+  * Add dutch po-debconf translation. Thanks to Bart Cornelis.
+    (Closes: #421838)
+
+ -- Ana Beatriz Guerrero Lopez <ana@debian.org>  Sat, 25 Aug 2007 07:37:38 +0200
+
+up-imapproxy (1.2.5-1) unstable; urgency=low
+
+  * New upstream version
+    - Acknowledge NMU (thanks, Jeroen)
+    - Resync'd with upstream
+
+  * Major debian-specific patches ; already sent upstream for inclusion
+    - IPv6 support (Closes: #370022)
+    - Proper pidfile handling (Closes: #416156)
+  
+  * Fixed improper dependency on non-essential debconf in {pre,post}inst
+  * Fixed build dependency on libwrap-dev (libwrap0-dev does not provide it
+    anymore)
+
+  * localization
+    - NL (Closes: #421838)
+
+ -- Jose Luis Tallon <jltallon@adv-solutions.net>  Mon, 19 Mar 2007 19:42:46 +0100
+
+up-imapproxy (1.2.4-10.1) unstable; urgency=high
+
+  * NMU to fix RC bug
+
+  [ Jose Luis Tallon ]
+  * Re-starting imapproxy failed when it was already running.
+    - Fixed imapproxy to write a pidfile itself
+    Start-stop-daemon can now interact with it properly (Closes: #415954)
+
+  [ Jeroen van Wolffelaar ]
+  * Document -p in manpage
+  * Patch cleanup
+  * Add code to initscript to not attempt to start a second version if already
+    running, and to not fail if imapproxy is no longer running (also #415954)
+
+ -- Jeroen van Wolffelaar <jeroen@wolffelaar.nl>  Wed, 28 Mar 2007 04:04:55 +0200
+
+up-imapproxy (1.2.4-10) unstable; urgency=high
+
+  * Bashism in initscript made upgrade sequence fail when sh was not bash
+    One-liner fix, and hopefully ready to go (Closes: #415455)
+
+ -- Jose Luis Tallon <jltallon@adv-solutions.net>  Mon, 19 Mar 2007 19:42:46 +0100
+
+up-imapproxy (1.2.4-9) unstable; urgency=high
+
+  * Bug #405704 ("crash on startup when IMAP server is not available"):
+    I made a mistake when applying the supplied patch. The correct changes
+    have been merged in this time. (Closes: #405704)
+
+ -- Jose Luis Tallon <jltallon@adv-solutions.net>  Thu, 15 Mar 2007  2:04:05 +0100
+
+up-imapproxy (1.2.4-8) unstable; urgency=high
+
+  * Fixed crash on startup when IMAP server is not available (Closes: #405704)
+
+  * Security: backported possible DoS fix from 1.2.5rc2 (Closes: #409861)
+
+  * Enhance security: enable chroot by default (Closes: #352999)
+    (Patch provided by Kees Cook <kees@outflux.net>)
+
+  * Build process: fixed using files from current autotools-dev
+
+  * Made initscript a bit more intelligent, so that it won't fail so easily
+    when imapproxyd is slower to start than expected (Closes: #369020)
+
+  * Localization
+    - Updated DE translation (Closes: #412221)
+
+ -- Jose Luis Tallon <jltallon@adv-solutions.net>  Sat, 10 Mar 2007 21:59:37 +0100
+
+up-imapproxy (1.2.4-7) unstable; urgency=medium
+
+  * Control file: debconf is now a regular dependency.
+    Andreas Metzler's suggestion was indeed correct.
+    Fixed letting dh_installdebconf do its magic (Closes: #400470)
+
+  * Postrm: remove manual invocation of db_purge (which caused a bug)
+    DebHelper will take care of it properly.
+
+ -- Jose Luis Tallon <jltallon@adv-solutions.net>  Thu,  7 Dec 2006 23:26:03 +0100
+
+up-imapproxy (1.2.4-6) unstable; urgency=high
+
+  * Acknowledge NMUs
+
+  * Enhance daemon()ization process a bit (Closes: #387992)
+
+  * Building
+    - Re-enable -Wall (Closes: #400468)
+
+  * Localization:
+    - ja translation added (Closes: #393212)
+
+  * Init.d infrastructure
+    - Fixed startup logic (Closes: #369020)
+    - Fixed stop logic (Closes: #389695)
+    - Fixed bashism in initscript (==) (Closes: #399362)
+    - ensured lsb-functions are sourced; Depend on lsb-base(Closes: #400459)
+
+  * Control file: debconf pre-depend *is* necessary (Closes: #400470)
+
+ -- Jose Luis Tallon <jltallon@adv-solutions.net>  Sun, 26 Nov 2006 19:56:07 +0100
+
+up-imapproxy (1.2.4-5.2) unstable; urgency=high
+
+  * Non-maintainer upload.
+  * Fix bashism in init script [ "$START" == "no" ...] (Closes: #399362)
+  * Add dependency on lsb-base (Closes: #400459)
+ 
+ -- Andreas Metzler <ametzler@debian.org>  Sun, 26 Nov 2006 10:47:33 +0000
+
+up-imapproxy (1.2.4-5.1) unstable; urgency=high
+
+  * Non-maintainer upload.
+  * Remove the odd grep hack; it broke upgrades, as we don't get any warnings
+    on stop anymore, and the non-zero return status of grep killed the init
+    script. (Closes: #389695)
+
+ -- Steinar H. Gunderson <sesse@debian.org>  Sat, 18 Nov 2006 15:51:36 +0100
+
+up-imapproxy (1.2.4-5) unstable; urgency=high
+
+  * Code enhancements
+    - Change priority of 'peer verify' messages to LOG_INFO (Closes: #339752)
+    - Fixed typo in src/main.c (Closes: #388500)
+
+  * IPv6 support added (Closes: #370022)
+
+  * Localization:
+    - pt translation added (Closes: #381663)
+
+  * Init.d infrastructure
+    - Added /etc/default/imapproxy support (Closes: #375665)
+    - Reduce initscript's verbosity again (Closes: #333847)
+
+ -- Jose Luis Tallon <jltallon@adv-solutions.net>  Wed, 20 Sep 2006 23:10:36 +0200
+
+up-imapproxy (1.2.4-4) unstable; urgency=low
+
+  * Enhanced initscript -- pidfile support (Closes: #353016)
+
+  * Updated to standards version 3.7.2 with no changes
+
+  * Package sponsored by Roberto Lumbreras <rover@debian.org>
+
+ -- Jose Luis Tallon <jltallon@adv-solutions.net>  Sun, 26 Feb 2006 16:34:08 +0100
+
+up-imapproxy (1.2.4-3) unstable; urgency=low
+
+  * Update dependency on debconf, add alternative (Closes: #332133)
+
+  * Enhanced initscript to avoid spurious error messages (Closes: #333847)
+
+  * Fixed nonexistant file during installation/configuration 
+    -- avoid compressing it (Closes: #333176)
+
+  * Package sponsored by Roberto Lumbreras <rover@debian.org>
+
+ -- Jose Luis Tallon <jltallon@adv-solutions.net>  Wed,  5 Oct 2005 13:56:11 +0200
+
+up-imapproxy (1.2.4-2) unstable; urgency=high
+
+  * Fixed format string vulnerability in connection parser (CAN-2005-2661).
+
+  * [INTL:sv] added Swedish translation[tack!] (Closes: #331352)
+
+  * Package sponsored by Roberto Lumbreras <rover@debian.org>
+
+ -- Jose Luis Tallon <jltallon@adv-solutions.net>  Wed,  5 Oct 2005 13:56:11 +0200
+
+up-imapproxy (1.2.4-1) unstable; urgency=low
+
+  * New upstream version
+    - Includes fix for DNS lookups at startup (Closes: #315291)
+
+  * Doc & Int'l fixes:
+    - Corrected imapproxyd(8) (Closes: #326979)
+    - Added vietnamese translation (Closes: #324064)
+
+  * Package sponsored by Roberto Lumbreras <rover@debian.org>
+
+ -- Jose Luis Tallon <jltallon@adv-solutions.net>  Thu, 22 Sep 2005 23:45:27 +0200
+
+up-imapproxy (1.2.3-1) unstable; urgency=low
+
+  * New upstream version
+
+  * Corrected init script (Closes: #265622)
+
+  * Added Czech translation (Closes: #287542)
+
+  * Package sponsored by Roberto Lumbreras <rover@debian.org>
+
+ -- Jose Luis Tallon <jltallon@adv-solutions.net>  Sun, 13 Mar 2005 01:43:16 +0100
+
+up-imapproxy (1.2.2+1.2.3rc2-1) unstable; urgency=high
+
+  * New upstream version. Several improvements.
+    Includes a fix for the DoS described in BugTraq's BID 11360
+    [CAN-2004-1035] (Closes: #281023)
+
+  * Package sponsored by Roberto Lumbreras <rover@debian.org>
+
+ -- Jose Luis Tallon <jltallon@adv-solutions.net>  Sat, 13 Nov 2004 12:21:27 +0100
+
+up-imapproxy (1.2.1-2) unstable; urgency=low
+
+  * Fix restart logic (broken because of a typo). (Closes: #242340)
+
+  * New FR debconf translation, thanks to Christian Perrier (Closes: #243638)
+
+  * New JA debconf translation, thanks to Hideki Yamane (Closes: #259164)
+
+  * Package sponsored by Roberto Lumbreras <rover@debian.org>
+
+ -- Jose Luis Tallon <jltallon@adv-solutions.net>  Thu, 15 Jul 2004 12:47:36 +0200
+
+up-imapproxy (1.2.1-1) unstable; urgency=low
+
+  * Initial Packaging. Fullfill RFP/ITP (Closes: #194503)
+ 
+  * License clarification from Upstream, Dave McMurtrie, explicitly allowing
+    linking against OpenSSL's libraries.
+
+  * Package sponsored by Roberto Lumbreras <rover@debian.org>
+
+ -- Jose Luis Tallon <jltallon@adv-solutions.net>  Fri, 19 Mar 2004 12:24:05 +0100

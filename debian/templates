@@ -1,0 +1,6 @@
+Template: imapproxy/imap-server
+Type: string
+Default: localhost
+_Description: IMAP server to connect to:
+ Please enter the hostname or address of the IMAP server ImapProxy will
+ connect to.
