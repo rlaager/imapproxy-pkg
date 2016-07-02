@@ -1,0 +1,9 @@
+[Unit]
+Documentation=man:imapproxyd(8)
+Description=IMAP proxy
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=forking
+ExecStart=/usr/sbin/imapproxyd -f /etc/imapproxy.conf

@@ -1,0 +1,14 @@
+Description: Consider LDFLAGS when linking pimstat
+Author: Christian Hofstaedtler <zeha@debian.org>
+
+--- up-imapproxy-1.2.7.orig/Makefile.in
++++ up-imapproxy-1.2.7/Makefile.in
+@@ -70,7 +70,7 @@ $(XYD_BIN): $(XYD_OBJ)
+ 	$(CC) -o $@ $(XYD_OBJ) $(LDFLAGS) $(XYD_LIB)
+ 
+ $(TAT_BIN): $(TAT_OBJ)
+-	$(CC) -o $@ $(TAT_OBJ) $(TAT_LIB)
++	$(CC) -o $@ $(TAT_OBJ) $(LDFLAGS) $(TAT_LIB)
+ 
+ clean:
+ 	rm -f ./src/core  $(XYD_OBJ) $(TAT_OBJ) $(XYD_BIN) $(TAT_BIN)

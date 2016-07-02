@@ -1,3 +1,17 @@
+up-imapproxy (1.2.7-1.2) unstable; urgency=medium
+
+  * Non-maintainer upload.
+  * Install native systemd unit (Closes: #720606)
+  * Disable start of service during postinst, as the upstream imapd
+    may not be available (or even on localhost). (Closes: #829310)
+  * Remove remains of quilt, source format is 3.0 (quilt) already
+    and all patches were applied upstream.
+  * Enable hardening build flags.
+  * Replace dh_clean -k with dh_prep.
+  * Remove unused lintian override.
+
+ -- Christian Hofstaedtler <zeha@debian.org>  Sat, 02 Jul 2016 16:22:31 +0200
+
 up-imapproxy (1.2.7-1.1) unstable; urgency=low
 
   * Non-maintainer upload.

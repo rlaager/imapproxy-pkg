@@ -2,8 +2,8 @@ Source: up-imapproxy
 Section: mail
 Priority: optional
 Maintainer: Jose Luis Tallon <jltallon@adv-solutions.net>
-Build-Depends: autotools-dev, debhelper (>= 5), quilt, po-debconf (>= 0.8.2), 
-	libwrap0-dev, libncurses-dev, libssl-dev
+Build-Depends: autotools-dev, debhelper (>= 5), po-debconf (>= 0.8.2), 
+	libwrap0-dev, libncurses-dev, libssl-dev, dh-systemd
 Homepage: http://www.imapproxy.org
 Standards-Version: 3.8.4
 
