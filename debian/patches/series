@@ -48,3 +48,4 @@
 0048-Retain-compatibility-with-older-OpenSSL-versions-tha.patch
 0049-Unify-log-messages.patch
 0050-Add-support-for-DNS-RR-and-ability-to-restrict-DNS-l.patch
+fix-egd-ifdef.patch
