@@ -9,7 +9,7 @@ Standards-Version: 3.8.4
 
 Package: imapproxy
 Architecture: any
-Depends: lsb-base, ${shlibs:Depends}, ${misc:Depends}, ucf (>= 0.28)
+Depends: lsb-base (>= 3.2-13), ${shlibs:Depends}, ${misc:Depends}, ucf (>= 0.28)
 Description: IMAP protocol proxy
  UP-ImapProxy proxies IMAP transactions between an IMAP client and an IMAP
  server. The general idea is that the client should never know that it is

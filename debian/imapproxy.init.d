@@ -38,7 +38,7 @@ set -e
 . /lib/lsb/init-functions
 
 test -r ${DEFAULT} && . ${DEFAULT}
-if [ "$START" = "no" -a "$1" != "stop" ]; then
+if [ "$START" = "no" -a "$1" != "stop" -a "$1" != "status" ]; then
 	log_warning_msg "Not starting imapproxy - disabled in ${DEFAULT}";
 	exit 0;
 fi
@@ -80,10 +80,13 @@ case "$1" in
 	sleep 2		# not gratuituous
 	$0 start
 	;;
+  status)
+	status_of_proc $DAEMON $NAME -p $PIDFILE
+	;;
   *)
 	N=/etc/init.d/$NAME
 	# echo "Usage: $N {start|stop|restart|reload|force-reload}" >&2
-	echo "Usage: $N {start|stop|restart|force-reload}" >&2
+	echo "Usage: $N {start|stop|restart|force-reload|status}" >&2
 	exit 1
 	;;
 esac
