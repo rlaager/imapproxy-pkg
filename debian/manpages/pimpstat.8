@@ -2,26 +2,47 @@
 .\" First parameter, NAME, should be all caps
 .\" Second parameter, SECTION, should be 1-8, maybe w/ subsection
 .\" other parameters are allowed: see man(7), man(1)
-.TH PIMPSTATS 8 "Mar 12, 2004" "Dave McMurtrie" "IMAP proxy daemon"
+.TH PIMPSTATS 8 "2016-11-22" "" "IMAP proxy daemon"
 .\" Please adjust this date whenever revising the manpage.
 .\"
 .SH NAME
  pimpstat \- IMAP Proxy statistics
 .SH SYNOPSIS
 .B pimpstat
-.RI [options]
+.RB [\| \-f
+.IR config
+.IR filename \|]
+.RB [\| \-h \|]
+.RB [\| \-c \|]
 .br
 .SH DESCRIPTION
-This manual page documents briefly the
+The
 .B pimpstat
-command.
-This manual page was written for the Debian distribution
-because the original program does not have a manual page.
+command outputs statistics about the running
+.B imapproxyd
+process.
+.SH OPTIONS
+.TP
+.B \-c
+Output one round of the "simple command line output format" (plain text) instead of the continuously updating curses interface.
+.TP
+.B \-f
+Specify the location of
+.I imapproxy.conf
+which contains the
+.I stat_filename
+directive, which specifies the file used for statistics.
+.TP
+.B \-h
+Show summary of options.
 .SH SEE ALSO
 .BR imapproxyd (8),
 .br
 .SH AUTHOR
 This manual page was written by Jose Luis Tallon
 .nh 
-<jltallon@adv-solutions.net>,
+<jltallon@adv-solutions.net>
+and Richard Laager
+.nh
+<rlaager@wiktel.com>
 for the Debian GNU/Linux system (but may be used by others).
