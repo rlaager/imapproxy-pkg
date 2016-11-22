@@ -1,4 +1,4 @@
-Description: Consider LDFLAGS when linking pimstat
+Description: Consider LDFLAGS when linking pimpstat
 Author: Christian Hofstaedtler <zeha@debian.org>
 
 --- up-imapproxy-1.2.7.orig/Makefile.in
