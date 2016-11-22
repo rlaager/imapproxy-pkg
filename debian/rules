@@ -35,7 +35,9 @@ config.status:
 		--with-libwrap
 	touch $@	
 
-build: debian/po/templates.pot build-stamp
+build: build-arch build-indep
+build-arch: debian/po/templates.pot build-stamp
+build-indep: build-stamp
 build-stamp:  config.status
 	dh_testdir
 	$(MAKE)
