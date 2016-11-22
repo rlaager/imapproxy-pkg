@@ -1,8 +1,8 @@
 [Unit]
 Documentation=man:imapproxyd(8)
 Description=IMAP proxy
-After=network-online.target
-Wants=network-online.target
+After=network-online.target courier-imap.service cyrus-imapd.service dovecot.service
+Wants=network-online.target courier-imap.service cyrus-imapd.service dovecot.service
 
 [Service]
 Type=forking

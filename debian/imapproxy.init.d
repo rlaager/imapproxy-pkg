@@ -5,7 +5,7 @@
 # Provides:          imapproxy
 # Required-Start:    $syslog $network $local_fs $remote_fs
 # Required-Stop:     $syslog $local_fs $remote_fs
-# Should-Start:      $named
+# Should-Start:      $named courier-imap cyrus-imapd dovecot
 # Should-Stop:       
 # Default-Start:     2 3 4 5
 # Default-Stop:      0 1 6
