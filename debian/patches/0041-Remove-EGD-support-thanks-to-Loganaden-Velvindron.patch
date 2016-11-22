@@ -1,0 +1,45 @@
+From 83015bb41644c951afe3fbaf3450e067f5d44646 Mon Sep 17 00:00:00 2001
+From: Paul Lesniewski <paul@squirrelmail.org>
+Date: Wed, 14 Sep 2016 00:00:22 +0000
+Subject: [PATCH 41/50] Remove EGD support (thanks to Loganaden Velvindron)
+
+git-svn-id: https://svn.code.sf.net/p/squirrelmail/code/trunk/imap_proxy@14564 7612ce4b-ef26-0410-bec9-ea0150e637f0
+---
+ ChangeLog  | 1 +
+ src/main.c | 7 +------
+ 2 files changed, 2 insertions(+), 6 deletions(-)
+
+diff --git a/ChangeLog b/ChangeLog
+index 3e0daa6..8af7a02 100644
+--- a/ChangeLog
++++ b/ChangeLog
+@@ -1,6 +1,7 @@
+ 2016-09-12  Paul Lesniewski <paul@squirrelmail.org>
+ 	* Added support for systemd startup
+ 	* Added support for accepting pre-auth ID commands (RFC 2971)
++	* Removed EGD support (thanks to Loganaden Velvindron)
+ 
+ 2014-01-20  Paul Lesniewski <paul@squirrelmail.org>
+ 	* Added support for up to TLS v1.2 (thanks to Emmanuel Dreyfus)
+diff --git a/src/main.c b/src/main.c
+index 07b3d43..7cadbc5 100644
+--- a/src/main.c
++++ b/src/main.c
+@@ -452,13 +452,8 @@ int main( int argc, char *argv[] )
+     /* Set up OpenSSL thread protection */
+     ssl_thread_setup(fn);
+ 
+-    /* Need to seed PRNG, too! */
+-    if ( RAND_egd( ( RAND_file_name( f_randfile, sizeof( f_randfile ) ) == f_randfile ) ? f_randfile : "/.rnd" ) )
+-    {
+-	/* Not an EGD, so read and write it. */
+-	if ( RAND_load_file( f_randfile, -1 ) )
++    if ( RAND_load_file( f_randfile, -1 ) )
+ 	RAND_write_file( f_randfile );
+-    }
+ 
+     SSL_load_error_strings();
+ 
+-- 
+2.7.4
+

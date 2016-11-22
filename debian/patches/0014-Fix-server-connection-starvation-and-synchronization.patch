@@ -1,0 +1,293 @@
+From c57be139111a467025cb9a97c5e5f8c905908617 Mon Sep 17 00:00:00 2001
+From: Paul Lesniewski <paul@squirrelmail.org>
+Date: Fri, 11 Mar 2011 21:40:38 +0000
+Subject: [PATCH 14/50] Fix server connection starvation and synchronization
+ issues (thanks to Jose Celestino)
+
+git-svn-id: https://svn.code.sf.net/p/squirrelmail/code/trunk/imap_proxy@14093 7612ce4b-ef26-0410-bec9-ea0150e637f0
+---
+ ChangeLog           |  7 +++++++
+ include/imapproxy.h |  3 ++-
+ src/icc.c           | 58 ++++++++++++++++++++++-------------------------------
+ src/imapcommon.c    |  2 ++
+ src/request.c       | 46 +++++++++++++++++++++++++++++++-----------
+ 5 files changed, 69 insertions(+), 47 deletions(-)
+
+diff --git a/ChangeLog b/ChangeLog
+index 2a90a7e..8014442 100644
+--- a/ChangeLog
++++ b/ChangeLog
+@@ -1,3 +1,10 @@
++2011-03-11  Paul Lesniewski <paul@squirrelmail.org>
++	* Fixed server connection synchronization issue that occurred when
++	  clients closed their connection immediately after logging in and
++	  associated security issue of closing such server connections
++	  without invalidating the connection in the internal connection
++          cache (thanks to Jose Celestino).
++
+ 2011-03-07  Paul Lesniewski <paul@squirrelmail.org>
+ 	* Added information about how to use squirrelmail-imap_proxy
+ 	  with servers that are only available via imaps
+diff --git a/include/imapproxy.h b/include/imapproxy.h
+index 6fc8034..bd92ae4 100644
+--- a/include/imapproxy.h
++++ b/include/imapproxy.h
+@@ -229,6 +229,7 @@ struct IMAPConnectionDescriptor
+     SSL *tls;                        /* TLS connection context               */
+ #endif
+     struct IMAPSelectCache ISC;      /* Cached SELECT data                   */
++    struct IMAPConnectionContext *ICC; /* backreference the ICC */
+     unsigned int reused;             /* Was the connection reused?           */
+ };
+ 
+@@ -356,7 +357,7 @@ extern void HandleRequest( int );
+ extern char *memtok( char *, char *, char ** );
+ extern int imparse_isatom( const char * );
+ extern ICD_Struct *Get_Server_conn( char *, char *, const char *, const char *, unsigned char );
+-extern void ICC_Logout( char *, ICD_Struct * );
++extern void ICC_Logout( ICC_Struct * );
+ extern void ICC_Recycle( unsigned int );
+ extern void ICC_Recycle_Loop( void );
+ extern void LockMutex( pthread_mutex_t * );
+diff --git a/src/icc.c b/src/icc.c
+index 2a87acf..6bdd614 100644
+--- a/src/icc.c
++++ b/src/icc.c
+@@ -247,13 +247,8 @@ extern void ICC_Recycle_Loop( void )
+  * Authors:	Dave McMurtrie <davemcmurtrie@hotmail.com>
+  *--
+  */
+-extern void ICC_Logout( char *Username, ICD_Struct *conn )
++extern void ICC_Logout( ICC_Struct *ICC )
+ {
+-    char *fn = "ICC_Logout()";
+-    unsigned int HashIndex;
+-    ICC_Struct *HashEntry = NULL;
+-    ICC_Struct *ICC_Active = NULL;
+-    
+     IMAPCount->InUseServerConnections--;
+     IMAPCount->RetainedServerConnections++;
+ 
+@@ -261,39 +256,34 @@ extern void ICC_Logout( char *Username, ICD_Struct *conn )
+ 	 IMAPCount->PeakRetainedServerConnections )
+ 	IMAPCount->PeakRetainedServerConnections = IMAPCount->RetainedServerConnections;
+     
+-    
+-    HashIndex = Hash( Username, HASH_TABLE_SIZE );
+-    
+-    LockMutex( &mp );
+-    
+-    for ( HashEntry = ICC_HashTable[ HashIndex ]; 
+-	  HashEntry; 
+-	  HashEntry = HashEntry->next )
+-    {
+-	if ( ( strcmp( Username, HashEntry->username ) == 0 ) &&
+-	     ( HashEntry->server_conn->sd == conn->sd ) )
+-	{
+-	    ICC_Active = HashEntry;
+-	}
+-    }
+-    
+-    if ( !ICC_Active )
+-    {
+-	UnLockMutex( &mp );
+-	
+-	syslog(LOG_WARNING, "%s: Cannot find ICC for '%s' on server sd %d to set logout time.", fn, Username, conn->sd );
+-	return;
+-    }
+-    
+-    ICC_Active->logouttime = time(0);
++    ICC->logouttime = time(0);
+ 
+-    UnLockMutex( &mp );
+-    
+-    syslog(LOG_INFO, "LOGOUT: '%s' from server sd [%d]", Username, conn->sd );
++    syslog(LOG_INFO, "LOGOUT: '%s' from server sd [%d]", ICC->username, ICC->server_conn->sd );
+     
+     return;
+ }
+ 
++void _ICC_Invalidate ( ICC_Struct *ICC )
++{
++    #if HAVE_LIBSSL
++    if ( ICC->server_conn->tls ) {
++        SSL_shutdown( ICC->server_conn->tls );
++        SSL_free( ICC->server_conn->tls );
++    }
++    #endif
++
++    close( ICC->server_conn->sd );
++
++    ICC->server_conn->sd = -1; /* make sure this can't be reused */
++    ICC->logouttime = 1;
++}
++
++extern void ICC_Invalidate ( ICC_Struct *ICC )
++{
++    LockMutex( &mp );
++    _ICC_Invalidate ( ICC );
++    UnLockMutex( &mp );
++}
+ 
+ 
+ /*
+diff --git a/src/imapcommon.c b/src/imapcommon.c
+index cf45a9a..f5ff7f6 100644
+--- a/src/imapcommon.c
++++ b/src/imapcommon.c
+@@ -1042,6 +1042,8 @@ extern ICD_Struct *Get_Server_conn( char *Username,
+ 	    ICC_Active->logouttime = 0;    /* zero means, "it's active". */
+ 	    ICC_Active->server_conn = Server.conn;
+ 	    
++	    Server.conn->ICC = ICC_Active;
++
+ 	    UnLockMutex( &mp );
+ 	    
+ 	    IMAPCount->InUseServerConnections++;
+diff --git a/src/request.c b/src/request.c
+index c3d2a6a..566d556 100644
+--- a/src/request.c
++++ b/src/request.c
+@@ -872,7 +872,7 @@ static int cmd_authenticate_login( ITD_Struct *Client,
+     if ( IMAP_Write( Client->conn, SendBuf, strlen( SendBuf ) ) == -1 )
+     {
+ 	IMAPCount->InUseServerConnections--;
+-	close( Server.conn->sd );
++    ICC_Invalidate(Server.conn->ICC);
+ 	syslog( LOG_ERR, "%s: Unable to send successful authentication message back to client: %s -- closing connection.", fn, strerror( errno ) );
+ 	return( -1 );
+     }
+@@ -894,10 +894,15 @@ static int cmd_authenticate_login( ITD_Struct *Client,
+ 
+     rc = Raw_Proxy( Client, &Server, &Server.conn->ISC );
+     
++    if (rc == -2) {
++        ICC_Invalidate( Server.conn->ICC );
++        return ( -1 );
++    }
++
+     Client->TraceOn = 0;
+     Server.TraceOn = 0;
+     
+-    ICC_Logout( Username, Server.conn );
++    ICC_Logout( Server.conn->ICC );
+     
+     return( rc );
+ }
+@@ -1024,7 +1029,7 @@ static int cmd_login( ITD_Struct *Client,
+ 	 * we can't communicate with the client...
+ 	 */
+ 	IMAPCount->InUseServerConnections--;
+-	close( Server.conn->sd );
++    ICC_Invalidate(Server.conn->ICC);
+ 	syslog(LOG_ERR, "%s: Unable to send successful login message back to client: %s -- closing connection.", fn, strerror(errno) );
+ 	return( -1 );
+     }
+@@ -1047,6 +1052,11 @@ static int cmd_login( ITD_Struct *Client,
+ 
+     rc = Raw_Proxy( Client, &Server, &Server.conn->ISC );
+ 
++    if (rc == -2) {
++        ICC_Invalidate( Server.conn->ICC );
++        return ( -1 );
++    }
++
+     /*
+      * It's not necessary to take out the trace mutex here.  The reason
+      * we take it out when we check above is because the trace username
+@@ -1058,7 +1068,7 @@ static int cmd_login( ITD_Struct *Client,
+     Server.TraceOn = 0;
+     
+     /* update the logout time for this cached connection */
+-    ICC_Logout( Username, Server.conn );
++    ICC_Logout( Server.conn->ICC );
+     
+     return( rc );
+ }
+@@ -1076,7 +1086,8 @@ static int cmd_login( ITD_Struct *Client,
+  *		ptr to server ITD_Struct
+  *
+  * Returns:	1 if we caught a logout
+- *		-1 on failure
++ *		-1 on failure on client
++ *		-2 on failure on server or fatal
+  *
+  * Authors:	Dave McMurtrie <davemcmurtrie@hotmail.com>
+  *--
+@@ -1150,7 +1161,17 @@ static int Raw_Proxy( ITD_Struct *Client, ITD_Struct *Server,
+ 	     * and HandleRequest will close the client-side socket.
+ 	     */
+ 	    syslog( LOG_WARNING, "%s: poll() timed out. server sd [%d]. client sd [%d].", fn, Server->conn->sd, Client->conn->sd );
+-	    return( -1 );
++	    /*
++	     * Update - thanks to Jose Celestino's patch, we have a way to
++	     * immediately ensure the server connection is shut down and
++	     * not reused - for situations where we get server or other
++	     * anomalous errors.  So we'll return -2 here instead, which
++	     * will trigger cmd_login() or cmd_authenticate_login() (the
++	     * only two callers of this function) to take care of the
++	     * server connection right away and return -1 to HandleRequest()
++	     * which then just closes the client connection as usual.
++	     */
++	    return( -2 );
+ 	}
+ 	
+ 	if ( status < 0 )
+@@ -1180,7 +1201,7 @@ static int Raw_Proxy( ITD_Struct *Client, ITD_Struct *Server,
+ 
+ 	    /* anything else, we're really jacked about it. */
+ 	    syslog(LOG_ERR, "%s: poll() failed: %s -- Returning failure.", fn, strerror( errno ) );
+-	    return( -1 );
++	    return( -2 );
+ 	}
+ 	
+ 	FailCount = 0;
+@@ -1210,7 +1231,7 @@ static int Raw_Proxy( ITD_Struct *Client, ITD_Struct *Server,
+ 			continue;
+ 		    
+ 		    syslog(LOG_WARNING, "%s: IMAP_Read() failed reading from IMAP server on sd [%d]: %s", fn, Server->conn->sd, strerror( errno ) );
+-		    return( -1 );
++		    return( -2 );
+ 		}
+ 		break;
+ 	    }
+@@ -1219,7 +1240,7 @@ static int Raw_Proxy( ITD_Struct *Client, ITD_Struct *Server,
+ 	    {
+ 		/* the server closed the connection, dammit */
+ 		syslog(LOG_ERR, "%s: IMAP server unexpectedly closed the connection on sd %d", fn, Server->conn->sd );
+-		return( -1 );
++		return( -2 );
+ 	    }
+ 	    
+ 	    if ( Server->TraceOn )
+@@ -1357,6 +1378,7 @@ static int Raw_Proxy( ITD_Struct *Client, ITD_Struct *Server,
+ 			    rc = Handle_Select_Command( Client, Server,
+ 							ISC, Client->ReadBuf,
+ 							status );
++//LEFT OFF HERE should this deal with ICC_INVALIDATE too???????????????????
+ 			    
+ 			    if ( rc == 0 )
+ 				continue;
+@@ -1397,7 +1419,7 @@ static int Raw_Proxy( ITD_Struct *Client, ITD_Struct *Server,
+ 			    continue;
+ 			
+ 			syslog(LOG_ERR, "%s: IMAP_Write() failed sending data to server on sd [%d]: %s", fn, Server->conn->sd, strerror( errno ) );
+-			return( -1 );
++			return( -2 );
+ 		    }
+ 		    break;
+ 		}
+@@ -1482,8 +1504,8 @@ static int Raw_Proxy( ITD_Struct *Client, ITD_Struct *Server,
+ 			if ( errno == EINTR )
+ 			    continue;
+ 			
+-			syslog(LOG_ERR, "%s: IMAP_Write() failed sending data to client on sd [%d]: %s", fn, Client->conn->sd, strerror( errno ) );
+-			return( -1 );
++			syslog(LOG_ERR, "%s: IMAP_Write() failed sending data to server on sd [%d]: %s", fn, Server->conn->sd, strerror( errno ) );
++			return( -2 );
+ 		    }
+ 		    break;
+ 		}
+-- 
+2.7.4
+

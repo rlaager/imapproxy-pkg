@@ -1,0 +1,77 @@
+From 3c72f39d2b4b80b30e74ac73aa4e4b6af9dd3a3e Mon Sep 17 00:00:00 2001
+From: Paul Lesniewski <paul@squirrelmail.org>
+Date: Tue, 8 Mar 2011 08:39:27 +0000
+Subject: [PATCH 13/50] Add information about how to use
+ squirrelmail-imap_proxy with servers that are only available via imaps
+
+git-svn-id: https://svn.code.sf.net/p/squirrelmail/code/trunk/imap_proxy@14091 7612ce4b-ef26-0410-bec9-ea0150e637f0
+---
+ ChangeLog              |  4 ++++
+ README.ssl             | 10 ++++++++--
+ scripts/imapproxy.conf |  3 +++
+ src/main.c             |  2 +-
+ 4 files changed, 16 insertions(+), 3 deletions(-)
+
+diff --git a/ChangeLog b/ChangeLog
+index 06f66fd..2a90a7e 100644
+--- a/ChangeLog
++++ b/ChangeLog
+@@ -1,3 +1,7 @@
++2011-03-07  Paul Lesniewski <paul@squirrelmail.org>
++	* Added information about how to use squirrelmail-imap_proxy
++	  with servers that are only available via imaps
++
+ 2011-01-16  Paul Lesniewski <paul@squirrelmail.org>
+ 	* Added the ability to authenticate to the IMAP server
+           using SASL plain authentication with fixed authentication
+diff --git a/README.ssl b/README.ssl
+index 5d11372..2a6c44c 100644
+--- a/README.ssl
++++ b/README.ssl
+@@ -13,8 +13,14 @@ advertising LOGINDISABLED in the capability string.
+ 
+ squirrelmail-imap_proxy does not support the deprecated notion of imaps
+ using port 993.  It only supports the use of the STARTTLS command to
+-initiate SSL/TLS from within a regular IMAP connection.  (Do NOT set the
+-"server_port" setting in imapproxy.conf to 993!)
++initiate SSL/TLS from within a regular IMAP connection (do NOT set the
++"server_port" setting in imapproxy.conf to 993!).  However, keep reading...
++
++If you are trying to proxy to an IMAP server that is only available using
++imaps/port 993 (e.g., Gmail), you can setup a SSL tunnel (check out stunnel)
++to that server and let squirrelmail-imap_proxy talk to the local (plaintext)
++end of that tunnel (in which case, no SSL setup is required for
++squirrelmail-imap_proxy).
+ 
+ There are four configuration file options that you'll have to set in order
+ for SSL to work.  They are tls_ca_file, tls_ca_path, tls_cert_file and
+diff --git a/scripts/imapproxy.conf b/scripts/imapproxy.conf
+index 59cf58a..ffb99d9 100644
+--- a/scripts/imapproxy.conf
++++ b/scripts/imapproxy.conf
+@@ -63,6 +63,9 @@ listen_port 143
+ ## highly non-standard, this should still be set to the server's normal,
+ ## unencrypted IMAP port and should NOT be set to port 993, since IMAP
+ ## Proxy uses STARTTLS to encrypt a "normal" IMAP connection.
++##
++## If the server is only available via (encrypted) port 993, please
++## consult the README.ssl file for help.
+ # 
+ server_port 143
+ 
+diff --git a/src/main.c b/src/main.c
+index f0f013a..903e069 100644
+--- a/src/main.c
++++ b/src/main.c
+@@ -846,7 +846,7 @@ static void ServerInit( void )
+     // mistake
+     //
+     if (strcmp(PC_Struct.server_port, "993") == 0)
+-        syslog(LOG_ERR, "WARNING: IMAP Proxy uses STARTTLS to encrypt a \"normal\" IMAP connection and does not support direct TLS/SSL connections that are typically served on port 993.  Chances are you have misconfigured the server_port setting, and that it should be something more like port 143.  If the server at '%s' supports STARTTLS from an unencrypted connection on port 993, then you can ignore this (but, again, chances are that this is NOT the case).", PC_Struct.server_hostname);
++        syslog(LOG_ERR, "WARNING: IMAP Proxy uses STARTTLS to encrypt a \"normal\" IMAP connection and does not support direct TLS/SSL connections that are typically served on port 993 (but there is a way around this if the server is only available on that port - see README.ssl).  Chances are you have misconfigured the server_port setting, and that it should be something more like port 143.  If the server at '%s' supports STARTTLS from an unencrypted connection on port 993, then you can ignore this (but, again, chances are that this is NOT the case).", PC_Struct.server_hostname);
+ 
+     /* 
+      * fill in the address family, the host address, and the
+-- 
+2.7.4
+

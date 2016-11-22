@@ -1,0 +1,458 @@
+From 36edc4747f3d2405378cfb02cb8a900f358b4f75 Mon Sep 17 00:00:00 2001
+From: Paul Lesniewski <paul@squirrelmail.org>
+Date: Tue, 13 Sep 2016 23:48:22 +0000
+Subject: [PATCH 40/50] Add support for accepting pre-auth ID commands (RFC
+ 2971)
+
+git-svn-id: https://svn.code.sf.net/p/squirrelmail/code/trunk/imap_proxy@14563 7612ce4b-ef26-0410-bec9-ea0150e637f0
+---
+ ChangeLog           |   1 +
+ README              |  38 +++++++++++
+ include/imapproxy.h |   2 +-
+ src/imapcommon.c    | 190 +++++++++++++++++++++++++++++++++++++++++++++++++++-
+ src/request.c       |  50 +++++++++++---
+ 5 files changed, 271 insertions(+), 10 deletions(-)
+
+diff --git a/ChangeLog b/ChangeLog
+index 207fc71..3e0daa6 100644
+--- a/ChangeLog
++++ b/ChangeLog
+@@ -1,5 +1,6 @@
+ 2016-09-12  Paul Lesniewski <paul@squirrelmail.org>
+ 	* Added support for systemd startup
++	* Added support for accepting pre-auth ID commands (RFC 2971)
+ 
+ 2014-01-20  Paul Lesniewski <paul@squirrelmail.org>
+ 	* Added support for up to TLS v1.2 (thanks to Emmanuel Dreyfus)
+diff --git a/README b/README
+index bb22f2c..86cfa65 100644
+--- a/README
++++ b/README
+@@ -360,6 +360,44 @@ S: * XPROXY_VERSION 1.2.6
+ S: a001 OK Completed
+ 
+ 
++ID
++--
++This is not a command specific to squirrelmail-imap_proxy, rather it
++comes from RFC 2971.  It is listed here because the ID command may
++be sent before the client authenticates, which means the proxy server
++handles it - sort of.  Any ID commands still need to be sent to the
++IMAP server, so the proxy responds with a fake "OK" and queues the ID
++commands to be sent once a LOGIN or AUTHENTICATE is received from the
++client and a server connection is (re)established.
++
++Usage:
++  <tag> ID [(parameter list)]
++
++  [(parameter list)] = (OPTIONAL) Parameters to be sent to IMAP server
++
++  See RFC 2971.
++
++Examples:
++C: a001 ID
++S: a001 OK Completed
++
++C: a001 ID ("x-originating-ip" "10.10.1.2")
++S: a001 OK Completed
++
++Responses above from the proxy server are faked and do not necessarily
++indicate that the IMAP server will accept the ID commands.  If an ID
++command fails when sent to the IMAP server, the proxy server will log
++a problem that includes the string "QUEUED PREAUTH failed".
++
++Any ID commands sent by the client AFTER login/authentication are
++always sent directly through to the IMAP server and are never handled
++by the proxy server.
++
++NOTE: Currently only the last ID command received before client login
++is remembered and relayed to the server.  Please let us know if you
++find this insufficient.
++
++
+ 
+ Happy proxying,
+ 
+diff --git a/include/imapproxy.h b/include/imapproxy.h
+index 63e6463..128deb2 100644
+--- a/include/imapproxy.h
++++ b/include/imapproxy.h
+@@ -362,7 +362,7 @@ extern int IMAP_Literal_Read( ITD_Struct * );
+ extern void HandleRequest( int );
+ extern char *memtok( char *, char *, char ** );
+ extern int imparse_isatom( const char * );
+-extern ICD_Struct *Get_Server_conn( char *, char *, const char *, const char *, unsigned char, char * );
++extern ICD_Struct *Get_Server_conn( char *, char *, const char *, const char *, unsigned char, char *, char * );
+ extern void ICC_Logout( ICC_Struct * );
+ extern void ICC_Recycle( unsigned int );
+ extern void ICC_Recycle_Loop( void );
+diff --git a/src/imapcommon.c b/src/imapcommon.c
+index 58987a3..8dfc06c 100644
+--- a/src/imapcommon.c
++++ b/src/imapcommon.c
+@@ -162,6 +162,11 @@ extern pthread_mutex_t trace;
+ extern IMAPCounter_Struct *IMAPCount;
+ extern ProxyConfig_Struct PC_Struct;
+ 
++/*
++ *  * Function prototypes for internal entry points.
++ *   */
++static int send_queued_preauth_commands( char *, ITD_Struct * );
++
+ #if HAVE_LIBSSL
+ extern SSL_CTX *tls_ctx;
+ 
+@@ -507,6 +512,8 @@ extern int Attempt_STARTTLS( ITD_Struct *Server )
+  *                            login/authentication request when available.
+  *                            NOTE: string must be allocated space at least
+  *                            as big as an ITD's ReadBuf (BUFSIZE)
++TODO: change this in the future to be a linked list:
++ *		ptr to a single queued pre-auth command string
+  *
+  * Returns:	ICD * on success
+  *              NULL on failure
+@@ -522,7 +529,8 @@ extern ICD_Struct *Get_Server_conn( char *Username,
+ 				    const char *ClientAddr,
+ 				    const char *portstr,
+ 				    unsigned char LiteralPasswd,
+-				    char *fullResponse )
++				    char *fullResponse,
++				    char *queued_preauth_command )
+ {
+     char *fn = "Get_Server_conn()";
+     unsigned int HashIndex;
+@@ -658,6 +666,16 @@ extern ICD_Struct *Get_Server_conn( char *Username,
+ 		/* Set the ICD as 'reused' */
+ 		ICC_Active->server_conn->reused = 1;
+ 
++		// send queued pre-auth commands
++		Server.conn = ICC_Active->server_conn;
++		if ( send_queued_preauth_commands( queued_preauth_command, &Server ) )
++		{
++			syslog( LOG_INFO,
++				"LOGIN: '%s' (%s:%s) failed: Unable to send queued pre-auth commands",
++				Username, ClientAddr, portstr );
++			goto fail;
++		}
++
+ 		return( ICC_Active->server_conn );
+ 	    }
+ 	}
+@@ -745,6 +763,16 @@ extern ICD_Struct *Get_Server_conn( char *Username,
+ #endif /* HAVE_LIBSSL */
+ 
+ 
++    // send queued pre-auth commands
++    if ( send_queued_preauth_commands( queued_preauth_command, &Server ) )
++    {
++	syslog( LOG_INFO,
++		"LOGIN: '%s' (%s:%s) failed: Unable to send queued pre-auth commands",
++		Username, ClientAddr, portstr );
++	goto fail;
++    }
++
++
+     /*
+      * Send and validate pre-authentication command if given
+      */
+@@ -1237,6 +1265,166 @@ extern ICD_Struct *Get_Server_conn( char *Username,
+ 
+ 
+ /*++
++ * Function:	send_queued_preauth_commands
++ *
++ * Purpose:	Sends queued pre-auth commands to a server connection.
++ *		The commands have been kept in memory by the proxy
++ *	 	server until the client sent an auth/login command.
++ *
++TODO: change this in the future to be a linked list:
++ * Parameters:	ptr to a single queued pre-auth command string
++ *		ptr to an IMAPTransactionDescriptor structure
++ *
++ * Returns:	non-zero if any of the commands failed
++ *
++ * Authors:	Paul Lesniewski
++ *--
++ */
++static int send_queued_preauth_commands( char *queued_preauth_command, ITD_Struct *Server )
++{
++    char *fn = "send_queued_preauth_commands()";
++    unsigned int BufLen = BUFSIZE - 1;
++    char SendBuf[BUFSIZE];
++    int rc;
++    char *tokenptr;
++    char *endptr;
++    char *last;
++    int tag_count = 0;
++
++//TODO: this line is where we would put a for loop to iterate over a linked list of saved preauth commands if we ever decide to implement the ability to have more than one........... NOTE in that case, when done here (error or success), we'd want to clear the list and free the memory it took
++if ( strlen( queued_preauth_command ) )
++    {
++	// "QP" == "Queued Preauth" (just plain "P" is already taken)
++	snprintf( SendBuf, BufLen, "QP%04d %s\r\n", ++tag_count, queued_preauth_command );
++	
++	if ( IMAP_Write( Server->conn, SendBuf, strlen(SendBuf) ) == -1 )
++	{
++	    syslog( LOG_INFO,
++		    "QUEUED PREAUTH failed: IMAP_Write() failed attempting to send queued pre-authentication command to IMAP server: %s",
++		    strerror( errno ) );
++	    goto fail;
++	}
++    
++	// Read the server response
++	//
++	for ( ;; )
++	{
++	    if ( ( rc = IMAP_Line_Read( Server ) ) == -1 )
++	    {
++		syslog( LOG_INFO,
++			"QUEUED PREAUTH failed: No response from IMAP server after sending queued pre-authentication command (%s)",
++			queued_preauth_command );
++		goto fail;
++	    }
++
++	    if ( Server->LiteralBytesRemaining )
++	    {
++		syslog(LOG_ERR, "%s: Unexpected string literal in server queued pre-authentication response.", fn );
++		goto fail;
++	    }
++	
++	    if ( Server->ReadBuf[0] != '*' )
++		break;
++	}
++    
++    
++	// Try to match up the tag in the server response to the client tag.
++	//
++	endptr = Server->ReadBuf + rc;
++    
++	tokenptr = memtok( Server->ReadBuf, endptr, &last );
++    
++	if ( !tokenptr )
++	{
++
++	    // no tokens found in server response?  Not likely, but we still
++	    // have to check.
++	    //
++	    syslog( LOG_INFO, "QUEUED PREAUTH failed: server response to queued pre-authentication command contained no tokens." );
++	    goto fail;
++	}
++    
++        // make SendBuf just contain the tag so we can compare it
++	SendBuf[6] = '\0';
++	if ( memcmp( (const void *)tokenptr, (const void *)SendBuf, strlen( tokenptr ) ) )
++	{
++
++	    // non-matching tag read back from the server... Lord knows what this
++	    // is, so we'll fail.
++	    //
++	    syslog( LOG_INFO, "QUEUED PREAUTH failed: server response to queued pre-authentication command contained non-matching tag." );
++	    goto fail;
++	}
++    
++    
++	// Now that we've matched the tags up, see if the response was 'OK'
++	//
++	tokenptr = memtok( NULL, endptr, &last );
++    
++	if ( !tokenptr )
++	{
++	    // again, not likely but we still have to check... 
++	    //
++	    syslog( LOG_INFO, "QUEUED PREAUTH failed: Malformed server response to queued pre-authentication command" );
++	    goto fail;
++	}
++    
++	if ( memcmp( (const void *)tokenptr, "OK", 2 ) )
++	{
++	    // In order to log the full server response (minus the tag),
++	    // we want to re-construct the ReadBuf starting at the location
++	    // currently pointed to by tokenptr.  Thus, we put back the
++	    // last space that memtok() had replaced with a null characater
++	    // (at location pointed to by last).
++	    //
++	    *last = ' ';
++
++	    // Then we re-adjust endptr to point to the CR at the end of
++	    // the line and set to NULL (a few lines below) so we can use
++	    // the rest of the response information as a normal string
++	    // 
++	    endptr = memchr( last + 1, '\r', endptr - (last + 1) );
++
++	    // No CR is unexpected; does this indicate malformed response?
++	    // Probably.  Anyway, we'll just give up on finding any other
++	    // info from the server.
++	    //
++	    if ( !endptr )
++	    endptr = last;
++
++	    *endptr = '\0';
++
++	    syslog( LOG_INFO,
++		"QUEUED PREAUTH failed: non-OK server response to queued pre-authentication command (%s): %s",
++		queued_preauth_command,
++		tokenptr );
++	    goto fail;
++	}
++    }
++
++
++    // finsihed without any errors
++    return 0;
++
++
++  fail:
++#if HAVE_LIBSSL
++    if ( Server->conn->tls )
++    {
++	SSL_shutdown( Server->conn->tls );
++	SSL_free( Server->conn->tls );
++    }
++#endif
++    close( Server->conn->sd );
++    free( Server->conn );
++    return 1;
++}
++
++
++
++
++
++/*++
+  * Function:	imparse_isatom
+  *
+  * Purpose:	determine if a string is an "atom" according to RFC2060
+diff --git a/src/request.c b/src/request.c
+index b2830a5..706a3fe 100644
+--- a/src/request.c
++++ b/src/request.c
+@@ -180,8 +180,8 @@ extern ProxyConfig_Struct PC_Struct;
+ static int cmd_noop( ITD_Struct *, char * );
+ static int cmd_logout( ITD_Struct *, char * );
+ static int cmd_capability( ITD_Struct *, char * );
+-static int cmd_authenticate_login( ITD_Struct *, char * );
+-static int cmd_login( ITD_Struct *, char *, char *, int, char *, unsigned char );
++static int cmd_authenticate_login( ITD_Struct *, char *, char * );
++static int cmd_login( ITD_Struct *, char *, char *, int, char *, unsigned char, char * );
+ static int cmd_trace( ITD_Struct *, char *, char * );
+ static int cmd_dumpicc( ITD_Struct *, char * );
+ static int cmd_newlog( ITD_Struct *, char * );
+@@ -674,6 +674,8 @@ static int cmd_capability( ITD_Struct *itd, char *Tag )
+  *
+  * Parameters:	ptr to ITD_Struct for client connection.
+  *              ptr to client tag
++TODO: change this in the future to be a linked list:
++ *              ptr to a single queued pre-auth command string
+  *
+  * Returns:	0 on success prior to authentication
+  *              1 on success after authentication (we caught a logout)
+@@ -685,7 +687,8 @@ static int cmd_capability( ITD_Struct *itd, char *Tag )
+  *--
+  */
+ static int cmd_authenticate_login( ITD_Struct *Client,
+-				   char *Tag )
++				   char *Tag,
++				   char *QueuedPreauthCommand )
+ {
+     char *fn = "cmd_authenticate_login()";
+     char SendBuf[BUFSIZE];
+@@ -832,7 +835,7 @@ static int cmd_authenticate_login( ITD_Struct *Client,
+      * he needs to login.  This is just in case there are any special
+      * characters in the password that we decoded.
+      */
+-    conn = Get_Server_conn( Username, Password, hostaddr, portstr, LITERAL_PASSWORD, fullServerResponse );
++    conn = Get_Server_conn( Username, Password, hostaddr, portstr, LITERAL_PASSWORD, fullServerResponse, QueuedPreauthCommand );
+     
+     /*
+      * all the code from here to the end is basically identical to that
+@@ -941,6 +944,8 @@ static int cmd_authenticate_login( ITD_Struct *Client,
+  *              ptr to client tag
+  *              unsigned char - flag to indicate literal password in login
+  *                              command.
++TODO: change this in the future to be a linked list:
++ *              ptr to a single queued pre-auth command string
+  *
+  * Returns:	0 on success prior to authentication
+  *              1 on success after authentication (we caught a logout)
+@@ -963,7 +968,8 @@ static int cmd_login( ITD_Struct *Client,
+ 		      char *Password,
+ 		      int passlen,
+ 		      char *Tag,
+-		      unsigned char LiteralLogin )
++		      unsigned char LiteralLogin,
++		      char *QueuedPreauthCommand )
+ {
+     char *fn = "cmd_login()";
+     char SendBuf[BUFSIZE];
+@@ -997,7 +1003,7 @@ static int cmd_login( ITD_Struct *Client,
+ 	return( -1 );
+     }
+     
+-    conn = Get_Server_conn( Username, Password, hostaddr, portstr, LiteralLogin, fullServerResponse );
++    conn = Get_Server_conn( Username, Password, hostaddr, portstr, LiteralLogin, fullServerResponse, QueuedPreauthCommand );
+ 
+     /*
+      * wipe out the passwd so we don't have it sitting in memory somewhere.
+@@ -1600,6 +1606,7 @@ extern void HandleRequest( int clientsd )
+     char *EndOfLine;
+     char *CP;
+     char SendBuf[BUFSIZE];
++    char S_QueuedPreauthCommand[BUFSIZE] = "";
+     int BytesRead;
+     int rc;
+     unsigned int BufLen = BUFSIZE - 1;
+@@ -1754,6 +1761,33 @@ extern void HandleRequest( int clientsd )
+ 	strncpy( S_Tag, Tag, MAXTAGLEN - 1 );
+ 	S_Tag[ MAXTAGLEN - 1 ] = '\0';
+ 	
++	if ( ! strcasecmp( (const char *)Command, "ID" ) )
++	{
++	    if ( Client.LiteralBytesRemaining )
++	    {
++		syslog( LOG_ERR, "%s: Unexpected literal specifier read from client on socket %d as part of ID command -- disconnecting client", fn, Client.conn->sd );
++		IMAPCount->CurrentClientConnections--;
++		close( Client.conn->sd );
++		return;
++	    }
++	    
++// TODO: in the future, we can capture more than one of these in a linked list, but for now, just use the last one we get
++	    // Store the command for later
++	    CP = EndOfLine - 2;
++	    *CP = '\0';
++	    Lasts++;
++		
++	    // make sure we don't go past end (is this necessary?)
++	    if ( Lasts > CP )
++	    {
++		Lasts = CP;
++	    }
++	    snprintf( S_QueuedPreauthCommand, BufLen, "ID %s", Lasts );
++
++	    // Fake response with a NOOP
++	    cmd_noop( &Client, S_Tag );
++	    continue;
++	}
+ 	if ( ! strcasecmp( (const char *)Command, "NOOP" ) )
+ 	{
+ 	    if ( Client.LiteralBytesRemaining )
+@@ -1803,7 +1837,7 @@ extern void HandleRequest( int clientsd )
+ 	    
+ 	    if ( !strcasecmp( (const char *)AuthMech, "LOGIN" ) )
+ 	    {
+-		rc = cmd_authenticate_login( &Client, S_Tag );
++		rc = cmd_authenticate_login( &Client, S_Tag, S_QueuedPreauthCommand );
+ 
+ 		if ( rc == 0 )
+ 		    continue;
+@@ -2161,7 +2195,7 @@ extern void HandleRequest( int clientsd )
+ 	    Client.MoreData = 0;
+ 	    
+ 	    
+-	    rc = cmd_login( &Client, S_UserName, S_Password, sizeof S_Password, S_Tag, LiteralFlag );
++	    rc = cmd_login( &Client, S_UserName, S_Password, sizeof S_Password, S_Tag, LiteralFlag, S_QueuedPreauthCommand );
+ 	    
+ 	    if ( rc == 0)
+ 		continue;
+-- 
+2.7.4
+

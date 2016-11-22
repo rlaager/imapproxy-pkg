@@ -1,0 +1,255 @@
+From 6b35340a5701695f13ec6fad24fdbd654e2b6d4d Mon Sep 17 00:00:00 2001
+From: Paul Lesniewski <paul@squirrelmail.org>
+Date: Fri, 1 Jan 2016 21:04:15 +0000
+Subject: [PATCH 34/50] Happy New Year
+
+git-svn-id: https://svn.code.sf.net/p/squirrelmail/code/trunk/imap_proxy@14540 7612ce4b-ef26-0410-bec9-ea0150e637f0
+---
+ README                       | 2 +-
+ copyright                    | 2 +-
+ include/common.h             | 2 +-
+ include/imapproxy.h          | 2 +-
+ scripts/imapproxy-bsd.init   | 2 +-
+ scripts/imapproxy-linux.init | 2 +-
+ scripts/pimpdaddy            | 2 +-
+ scripts/rc.pimpdaddy         | 2 +-
+ src/becomenonroot.c          | 2 +-
+ src/config.c                 | 2 +-
+ src/hash.c                   | 2 +-
+ src/icc.c                    | 2 +-
+ src/imapcommon.c             | 2 +-
+ src/logging.c                | 2 +-
+ src/main.c                   | 2 +-
+ src/pimpstat.c               | 2 +-
+ src/request.c                | 2 +-
+ src/select.c                 | 2 +-
+ src/threads.c                | 2 +-
+ 19 files changed, 19 insertions(+), 19 deletions(-)
+
+diff --git a/README b/README
+index 74f5414..1279e5f 100644
+--- a/README
++++ b/README
+@@ -1,4 +1,4 @@
+-     Copyright (c) 2010-2015 The SquirrelMail Project Team
++     Copyright (c) 2010-2016 The SquirrelMail Project Team
+      Copyright (c) 2002-2010 Dave McMurtrie
+ 
+ 
+diff --git a/copyright b/copyright
+index dff08fc..0bc4042 100644
+--- a/copyright
++++ b/copyright
+@@ -1,4 +1,4 @@
+ 
+- Copyright (c) 2010-2015 The SquirrelMail Project Team
++ Copyright (c) 2010-2016 The SquirrelMail Project Team
+  Copyright (c) 2002-2010 Dave McMurtrie
+ 
+diff --git a/include/common.h b/include/common.h
+index 968b5ce..17df65f 100644
+--- a/include/common.h
++++ b/include/common.h
+@@ -1,6 +1,6 @@
+ /*
+ **
+-** Copyright (c) 2010-2015 The SquirrelMail Project Team
++** Copyright (c) 2010-2016 The SquirrelMail Project Team
+ ** Copyright (c) 2002-2010 Dave McMurtrie
+ **
+ ** Licensed under the GNU GPL. For full terms see the file COPYING.
+diff --git a/include/imapproxy.h b/include/imapproxy.h
+index 5ff9fd8..63e6463 100644
+--- a/include/imapproxy.h
++++ b/include/imapproxy.h
+@@ -1,6 +1,6 @@
+ /*
+ **
+-** Copyright (c) 2010-2015 The SquirrelMail Project Team
++** Copyright (c) 2010-2016 The SquirrelMail Project Team
+ ** Copyright (c) 2002-2010 Dave McMurtrie
+ **
+ ** Licensed under the GNU GPL. For full terms see the file COPYING.
+diff --git a/scripts/imapproxy-bsd.init b/scripts/imapproxy-bsd.init
+index 6951738..2814e28 100644
+--- a/scripts/imapproxy-bsd.init
++++ b/scripts/imapproxy-bsd.init
+@@ -1,6 +1,6 @@
+ #!/bin/sh
+ ##
+-## Copyright (c) 2010-2015 The SquirrelMail Project Team
++## Copyright (c) 2010-2016 The SquirrelMail Project Team
+ ##
+ ## Licensed under the GNU GPL. For full terms see the file COPYING.
+ ##
+diff --git a/scripts/imapproxy-linux.init b/scripts/imapproxy-linux.init
+index be1b60f..3c0fedf 100755
+--- a/scripts/imapproxy-linux.init
++++ b/scripts/imapproxy-linux.init
+@@ -1,6 +1,6 @@
+ #!/bin/sh
+ ##
+-## Copyright (c) 2010-2015 The SquirrelMail Project Team
++## Copyright (c) 2010-2016 The SquirrelMail Project Team
+ ## Copyright (c) 2002-2010 Dave McMurtrie
+ ##
+ ## Licensed under the GNU GPL. For full terms see the file COPYING.
+diff --git a/scripts/pimpdaddy b/scripts/pimpdaddy
+index 87be51f..15d6faa 100755
+--- a/scripts/pimpdaddy
++++ b/scripts/pimpdaddy
+@@ -1,6 +1,6 @@
+ #!/usr/bin/perl
+ ##
+-## Copyright (c) 2010-2015 The SquirrelMail Project Team
++## Copyright (c) 2010-2016 The SquirrelMail Project Team
+ ## Copyright (c) 2002-2010 Dave McMurtrie
+ ##
+ ## Licensed under the GNU GPL. For full terms see the file COPYING.
+diff --git a/scripts/rc.pimpdaddy b/scripts/rc.pimpdaddy
+index ca714b7..0e2cfdf 100755
+--- a/scripts/rc.pimpdaddy
++++ b/scripts/rc.pimpdaddy
+@@ -1,6 +1,6 @@
+ #!/bin/sh
+ ##
+-## Copyright (c) 2010-2015 The SquirrelMail Project Team
++## Copyright (c) 2010-2016 The SquirrelMail Project Team
+ ## Copyright (c) 2002-2010 Dave McMurtrie
+ ##
+ ## Licensed under the GNU GPL. For full terms see the file COPYING.
+diff --git a/src/becomenonroot.c b/src/becomenonroot.c
+index 4e9e10f..d583d29 100644
+--- a/src/becomenonroot.c
++++ b/src/becomenonroot.c
+@@ -1,6 +1,6 @@
+ /*
+ **
+-** Copyright (c) 2010-2015 The SquirrelMail Project Team
++** Copyright (c) 2010-2016 The SquirrelMail Project Team
+ ** Copyright (c) 2002-2010 Dave McMurtrie
+ **
+ ** Licensed under the GNU GPL. For full terms see the file COPYING.
+diff --git a/src/config.c b/src/config.c
+index a3b993d..078a834 100644
+--- a/src/config.c
++++ b/src/config.c
+@@ -1,6 +1,6 @@
+ /*
+ **
+-** Copyright (c) 2010-2015 The SquirrelMail Project Team
++** Copyright (c) 2010-2016 The SquirrelMail Project Team
+ ** Copyright (c) 2002-2010 Dave McMurtrie
+ **
+ ** Licensed under the GNU GPL. For full terms see the file COPYING.
+diff --git a/src/hash.c b/src/hash.c
+index b3d8069..8c41070 100644
+--- a/src/hash.c
++++ b/src/hash.c
+@@ -1,6 +1,6 @@
+ /*
+ **
+-** Copyright (c) 2010-2015 The SquirrelMail Project Team
++** Copyright (c) 2010-2016 The SquirrelMail Project Team
+ ** Copyright (c) 2002-2010 Dave McMurtrie
+ **
+ ** Licensed under the GNU GPL. For full terms see the file COPYING.
+diff --git a/src/icc.c b/src/icc.c
+index 695301f..9da7453 100644
+--- a/src/icc.c
++++ b/src/icc.c
+@@ -1,6 +1,6 @@
+ /*
+ **
+-** Copyright (c) 2010-2015 The SquirrelMail Project Team
++** Copyright (c) 2010-2016 The SquirrelMail Project Team
+ ** Copyright (c) 2002-2010 Dave McMurtrie
+ **
+ ** Licensed under the GNU GPL. For full terms see the file COPYING.
+diff --git a/src/imapcommon.c b/src/imapcommon.c
+index 8ca87ce..58987a3 100644
+--- a/src/imapcommon.c
++++ b/src/imapcommon.c
+@@ -1,6 +1,6 @@
+ /*
+ **
+-** Copyright (c) 2010-2015 The SquirrelMail Project Team
++** Copyright (c) 2010-2016 The SquirrelMail Project Team
+ ** Copyright (c) 2002-2010 Dave McMurtrie
+ **
+ ** Licensed under the GNU GPL. For full terms see the file COPYING.
+diff --git a/src/logging.c b/src/logging.c
+index a56fe4b..e899f23 100644
+--- a/src/logging.c
++++ b/src/logging.c
+@@ -1,6 +1,6 @@
+ /*
+ **
+-** Copyright (c) 2010-2015 The SquirrelMail Project Team
++** Copyright (c) 2010-2016 The SquirrelMail Project Team
+ ** Copyright (c) 2002-2010 Dave McMurtrie
+ **
+ ** Licensed under the GNU GPL. For full terms see the file COPYING.
+diff --git a/src/main.c b/src/main.c
+index 23124c0..06e3777 100644
+--- a/src/main.c
++++ b/src/main.c
+@@ -1,6 +1,6 @@
+ /*
+ **
+-** Copyright (c) 2010-2015 The SquirrelMail Project Team
++** Copyright (c) 2010-2016 The SquirrelMail Project Team
+ ** Copyright (c) 2002-2010 Dave McMurtrie
+ **
+ ** Licensed under the GNU GPL. For full terms see the file COPYING.
+diff --git a/src/pimpstat.c b/src/pimpstat.c
+index 8025b9c..9e33759 100644
+--- a/src/pimpstat.c
++++ b/src/pimpstat.c
+@@ -1,6 +1,6 @@
+ /*
+ **
+-** Copyright (c) 2010-2015 The SquirrelMail Project Team
++** Copyright (c) 2010-2016 The SquirrelMail Project Team
+ ** Copyright (c) 2002-2010 Dave McMurtrie
+ **
+ ** Licensed under the GNU GPL. For full terms see the file COPYING.
+diff --git a/src/request.c b/src/request.c
+index fb28c5a..b2830a5 100644
+--- a/src/request.c
++++ b/src/request.c
+@@ -1,6 +1,6 @@
+ /*
+ **
+-** Copyright (c) 2010-2015 The SquirrelMail Project Team
++** Copyright (c) 2010-2016 The SquirrelMail Project Team
+ ** Copyright (c) 2002-2010 Dave McMurtrie
+ **
+ ** Licensed under the GNU GPL. For full terms see the file COPYING.
+diff --git a/src/select.c b/src/select.c
+index d5c824b..a53c159 100644
+--- a/src/select.c
++++ b/src/select.c
+@@ -1,6 +1,6 @@
+ /*
+ **
+-** Copyright (c) 2010-2015 The SquirrelMail Project Team
++** Copyright (c) 2010-2016 The SquirrelMail Project Team
+ ** Copyright (c) 2002-2010 Dave McMurtrie
+ **
+ ** Licensed under the GNU GPL. For full terms see the file COPYING.
+diff --git a/src/threads.c b/src/threads.c
+index 954c0d0..7ead4e2 100644
+--- a/src/threads.c
++++ b/src/threads.c
+@@ -1,6 +1,6 @@
+ /*
+ **
+-** Copyright (c) 2010-2015 The SquirrelMail Project Team
++** Copyright (c) 2010-2016 The SquirrelMail Project Team
+ ** Copyright (c) 2002-2010 Dave McMurtrie
+ **
+ ** Licensed under the GNU GPL. For full terms see the file COPYING.
+-- 
+2.7.4
+

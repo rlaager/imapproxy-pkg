@@ -1,0 +1,29 @@
+From 64372115a7aa2bb9dc8ffa874bf4c9b96d14e90b Mon Sep 17 00:00:00 2001
+From: Paul Lesniewski <paul@squirrelmail.org>
+Date: Tue, 24 Aug 2010 18:38:08 +0000
+Subject: [PATCH 05/50] Add warning about using server_port as 993 (imaps isn't
+ supported) to log output so it's harder to miss such mistakes
+
+git-svn-id: https://svn.code.sf.net/p/squirrelmail/code/trunk/imap_proxy@14051 7612ce4b-ef26-0410-bec9-ea0150e637f0
+---
+ ChangeLog | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/ChangeLog b/ChangeLog
+index d3e60f3..b74c343 100644
+--- a/ChangeLog
++++ b/ChangeLog
+@@ -1,3 +1,10 @@
++2010-08-19  Paul Lesniewski <paul@squirrelmail.org>
++	* Added several warnings that try to catch the case where someone
++          tries to set the server_port to 993, which is usually a mistaken
++          use of TLS/SSL (port 993 is usually for imaps, which is not
++          supported; IMAP Proxy supports STARTTLS from a "normal" port,
++          which is usually 143)
++
+ 2010-07-26  Paul Lesniewski <paul@squirrelmail.org>
+ 	* Updated copyrights and other administrative actions related to
+           the adoption of this software by the SquirrelMail Project
+-- 
+2.7.4
+

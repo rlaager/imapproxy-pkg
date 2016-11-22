@@ -1,0 +1,50 @@
+From 580b3673ad279ab314c713964f5777af881bc09f Mon Sep 17 00:00:00 2001
+From: Paul Lesniewski <paul@squirrelmail.org>
+Date: Sat, 30 Oct 2010 10:33:22 +0000
+Subject: [PATCH 09/50] Fix compilation warnings when openssl is not available
+
+git-svn-id: https://svn.code.sf.net/p/squirrelmail/code/trunk/imap_proxy@14073 7612ce4b-ef26-0410-bec9-ea0150e637f0
+---
+ ChangeLog      | 3 +++
+ src/logging.c  | 1 +
+ src/pimpstat.c | 1 +
+ 3 files changed, 5 insertions(+)
+
+diff --git a/ChangeLog b/ChangeLog
+index ea19169..76e901e 100644
+--- a/ChangeLog
++++ b/ChangeLog
+@@ -1,3 +1,6 @@
++2010-10-29  Paul Lesniewski <paul@squirrelmail.org>
++	* Fixed compilation warnings when openssl is not available.
++
+ 2010-10-28  Paul Lesniewski <paul@squirrelmail.org>
+ 	* Increased default buffer sizes.
+ 
+diff --git a/src/logging.c b/src/logging.c
+index 75e18b5..3e6333a 100644
+--- a/src/logging.c
++++ b/src/logging.c
+@@ -42,6 +42,7 @@
+ **
+ */
+ 
++#include <stdlib.h>
+ #include <syslog.h>
+ #include <string.h>
+ 
+diff --git a/src/pimpstat.c b/src/pimpstat.c
+index 1084dbd..3928f2b 100644
+--- a/src/pimpstat.c
++++ b/src/pimpstat.c
+@@ -61,6 +61,7 @@
+ 
+ #include "imapproxy.h"
+ #include <errno.h>
++#include <stdlib.h>
+ #include <string.h>
+ #include <sys/mman.h>
+ #include <sys/types.h>
+-- 
+2.7.4
+

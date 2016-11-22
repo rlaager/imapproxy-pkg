@@ -1,0 +1,236 @@
+From 0f082ee8ec5e7f8209a2a66654b4679630f2742f Mon Sep 17 00:00:00 2001
+From: Paul Lesniewski <paul@squirrelmail.org>
+Date: Wed, 14 Sep 2016 02:55:23 +0000
+Subject: [PATCH 50/50] Add support for DNS RR and ability to restrict DNS
+ lookups to IPv4 or IPv6 only (thanks to Wolfgang Breyha)
+
+git-svn-id: https://svn.code.sf.net/p/squirrelmail/code/trunk/imap_proxy@14573 7612ce4b-ef26-0410-bec9-ea0150e637f0
+---
+ ChangeLog              |  8 ++++++--
+ include/imapproxy.h    |  2 ++
+ scripts/imapproxy.conf | 20 ++++++++++++++++++++
+ src/config.c           |  8 ++++++++
+ src/imapcommon.c       | 25 +++++++++++++++++++++----
+ src/main.c             | 31 ++++++++++++++++++++++++++++---
+ 6 files changed, 85 insertions(+), 9 deletions(-)
+
+diff --git a/ChangeLog b/ChangeLog
+index 6435853..8f36b5c 100644
+--- a/ChangeLog
++++ b/ChangeLog
+@@ -1,12 +1,16 @@
+ 2016-09-12  Paul Lesniewski <paul@squirrelmail.org>
+ 	* Added support for systemd startup
+ 	* Added support for accepting pre-auth ID commands (RFC 2971)
+-	* Retain compatibility with older OpenSSL versions (thanks to
+-	  Wolfgang Breyha)
++	* Added support for DNS RR to cycle through multiple IMAP
++	  server backends (thanks to Wolfgang Breyha)
++	* Added ability to restrict DNS lookups to IPv4 or IPv6
++	  only (thanks to Wolfgang Breyha)
+ 	* Make EGD support conditional, provide compatibility with
+ 	  LibreSSL, other small fixes provided by the BSD team
+ 	* Fixed anomalous crashes recycling used connections (thanks
+ 	  to Emmanuel Dreyfus)
++	* Retain compatibility with older OpenSSL versions (thanks to
++	  Wolfgang Breyha)
+ 	* Make use of the no_new_privs flag (Linux only) when becoming
+ 	  non-root (thanks to Shawn Landden)
+ 
+diff --git a/include/imapproxy.h b/include/imapproxy.h
+index 3067daf..f96644d 100644
+--- a/include/imapproxy.h
++++ b/include/imapproxy.h
+@@ -314,6 +314,8 @@ struct ProxyConfig
+     char *auth_sasl_plain_username;           /* authentication username under SASL PLAIN */
+     char *auth_sasl_plain_password;           /* authentication password under SASL PLAIN */
+     char *auth_shared_secret;                 /* REQUIRED shared secret in leiu of a user password when using LOGIN command with SASL PLAIN authentication */
++    unsigned int ipversion;                   /* limit DNS requests to AF_INET or AF_INET6 */
++    unsigned int dnsrr;                       /* cycle through all DNS entries we got */
+ };
+ 
+ 
+diff --git a/scripts/imapproxy.conf b/scripts/imapproxy.conf
+index 35fc712..e433dfe 100644
+--- a/scripts/imapproxy.conf
++++ b/scripts/imapproxy.conf
+@@ -249,3 +249,23 @@ enable_admin_commands no
+ #auth_shared_secret
+ 
+ 
++#
++## Use DNS RR
++#
++## Use DNS round robin to cycle through all returned RRs we
++## got when looking up the IMAP server with getaddrinfo().
++## Default is no.
++##
++#
++#dns_rr yes
++
++
++#
++## Limit DNS requests to AF_INET or AF_INET6
++##
++## Set ipversion_only to 4 or 6 accordingly.
++## Default if unset is AF_UNSPEC for both A and AAAA.
++#
++#ipversion_only 6
++ 
++
+diff --git a/src/config.c b/src/config.c
+index 078a834..1a15f08 100644
+--- a/src/config.c
++++ b/src/config.c
+@@ -328,6 +328,8 @@ void SetDefaultConfigValues(ProxyConfig_Struct *PC_Struct)
+ {
+     PC_Struct->server_connect_retries = DEFAULT_SERVER_CONNECT_RETRIES;
+     PC_Struct->server_connect_delay = DEFAULT_SERVER_CONNECT_DELAY;
++    PC_Struct->ipversion = 0;
++    PC_Struct->dnsrr = 0;
+ 
+     return;
+ }
+@@ -468,6 +470,12 @@ extern void SetConfigOptions( char *ConfigFile )
+     ADD_TO_TABLE( "enable_admin_commands", SetBooleanValue,
+ 		  &PC_Struct.enable_admin_commands, index );
+     
++    ADD_TO_TABLE( "ipversion_only", SetNumericValue,
++		  &PC_Struct.ipversion, index );
++    
++    ADD_TO_TABLE( "dns_rr", SetBooleanValue,
++		  &PC_Struct.dnsrr, index );
++    
+     ConfigTable[index].Keyword[0] = '\0';
+     
+     FP = fopen( ConfigFile, "r" );
+diff --git a/src/imapcommon.c b/src/imapcommon.c
+index ee7701b..9e52d96 100644
+--- a/src/imapcommon.c
++++ b/src/imapcommon.c
+@@ -159,6 +159,7 @@ extern ICC_Struct *ICC_HashTable[ HASH_TABLE_SIZE ];
+ extern ISD_Struct ISD;
+ extern pthread_mutex_t mp;
+ extern pthread_mutex_t trace;
++extern pthread_mutex_t aimtx;
+ extern IMAPCounter_Struct *IMAPCount;
+ extern ProxyConfig_Struct PC_Struct;
+ 
+@@ -551,6 +552,7 @@ extern ICD_Struct *Get_Server_conn( char *Username,
+     ITD_Struct Server;
+     int rc;
+     unsigned int Expiration;
++    struct addrinfo *useai;
+ 
+     EVP_MD_CTX mdctx;
+     int md_len;
+@@ -704,8 +706,23 @@ extern ICD_Struct *Get_Server_conn( char *Username,
+     /* As a new connection, the ICD is not 'reused' */
+     Server.conn->reused = 0;
+ 
+-    Server.conn->sd = socket( ISD.srv->ai_family, ISD.srv->ai_socktype, 
+-			      ISD.srv->ai_protocol );
++    if (PC_Struct.dnsrr)
++    {
++        LockMutex( &aimtx );
++        /* cycle through returned hosts */
++        if ( ISD.srv->ai_next )
++            ISD.srv = ISD.srv->ai_next;
++        else
++            ISD.srv = ISD.airesults;
++    
++        useai = ISD.srv;
++        UnLockMutex( &aimtx );
++    }
++    else
++        useai = ISD.srv;
++
++    Server.conn->sd = socket( useai->ai_family, useai->ai_socktype, 
++			      useai->ai_protocol );
+     if ( Server.conn->sd == -1 )
+     {
+ 	syslog( LOG_INFO,
+@@ -720,8 +737,8 @@ extern ICD_Struct *Get_Server_conn( char *Username,
+ 	setsockopt( Server.conn->sd, SOL_SOCKET, SO_KEEPALIVE, &onoff, sizeof onoff );
+     }
+     
+-    if ( connect( Server.conn->sd, (struct sockaddr *)ISD.srv->ai_addr, 
+-		  ISD.srv->ai_addrlen ) == -1 )
++    if ( connect( Server.conn->sd, (struct sockaddr *)useai->ai_addr, 
++		  useai->ai_addrlen ) == -1 )
+     {
+ 	syslog( LOG_INFO,
+ 		"LOGIN: '%s' (%s:%s) failed: Unable to connect to IMAP server: %s",
+diff --git a/src/main.c b/src/main.c
+index 944f5ce..e08a791 100644
+--- a/src/main.c
++++ b/src/main.c
+@@ -246,6 +246,7 @@ ICC_Struct *ICC_HashTable[ HASH_TABLE_SIZE ];
+ IMAPCounter_Struct *IMAPCount;       /* global IMAP counter struct */
+ pthread_mutex_t mp;                  /* "main" mutex used for ICC sync */
+ pthread_mutex_t trace;               /* mutex used for username tracing */
++pthread_mutex_t aimtx;               /* mutex used for DNS RR */
+ char TraceUser[MAXUSERNAMELEN];      /* username we want to trace */
+ int Tracefd;                         /* fd of our trace file (always open) */
+ ProxyConfig_Struct PC_Struct;        /* Global configuration data */
+@@ -411,6 +412,13 @@ int main( int argc, char *argv[] )
+ 	exit( 1 );
+     }
+ 
++    rc = pthread_mutex_init(&aimtx, NULL);
++    if ( rc )
++    {
++	syslog(LOG_ERR, "%s: pthread_mutex_init() returned error [%d] initializing aimtx mutex.  Exiting.", fn, rc );
++	exit( 1 );
++    }
++
+     TraceUser[0] = '\0';
+     
+     syslog( LOG_INFO, "%s: Allocating %d IMAP connection structures.", 
+@@ -692,8 +700,8 @@ int main( int argc, char *argv[] )
+     /* launch a recycle thread before we loop */
+     pthread_create( &RecycleThread, &attr, (void *)ICC_Recycle_Loop, NULL );
+ 
+-    syslog(LOG_INFO, "%s: Launched ICC recycle thread with id %d", 
+-	   fn, (int)RecycleThread );
++    syslog(LOG_INFO, "%s: Launched ICC recycle thread with id %lu", 
++	   fn, (unsigned long int)RecycleThread );
+ 
+     /*
+      * Now start listening and accepting connections.
+@@ -863,7 +871,16 @@ static void ServerInit( void )
+ 	    PC_Struct.server_hostname );
+     
+     memset( &aihints, 0, sizeof aihints );
+-    aihints.ai_family = AF_UNSPEC;
++    switch ( PC_Struct.ipversion )
++    {
++         case 4: aihints.ai_family = AF_INET;
++                 syslog( LOG_INFO, "%s: limiting to IPv4 only", fn);
++                 break;
++         case 6: aihints.ai_family = AF_INET6;
++                 syslog( LOG_INFO, "%s: limiting to IPv6 only", fn);
++                 break;
++         default: aihints.ai_family = AF_UNSPEC;
++    }
+     aihints.ai_socktype = SOCK_STREAM;
+ 
+     for( ;; )
+@@ -894,6 +911,14 @@ static void ServerInit( void )
+     if (strcmp(PC_Struct.server_port, "993") == 0)
+         syslog(LOG_ERR, "WARNING: IMAP Proxy uses STARTTLS to encrypt a \"normal\" IMAP connection and does not support direct TLS/SSL connections that are typically served on port 993 (but there is a way around this if the server is only available on that port - see README.ssl).  Chances are you have misconfigured the server_port setting, and that it should be something more like port 143.  If the server at '%s' supports STARTTLS from an unencrypted connection on port 993, then you can ignore this (but, again, chances are that this is NOT the case).", PC_Struct.server_hostname);
+ 
++    /*
++     * check for DNS RR
++     */
++    if ( ai->ai_next && PC_Struct.dnsrr ) /* at least a second RR was returned */
++        syslog(LOG_INFO, "%s: Using DNS RR", fn);
++    else
++        PC_Struct.dnsrr = 0;
++
+     /* 
+      * fill in the address family, the host address, and the
+      * service port of our global socket address structure
+-- 
+2.7.4
+

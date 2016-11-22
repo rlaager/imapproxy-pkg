@@ -1,0 +1,27 @@
+From b3aaf41a570ab8ee9c8266b4b52b3e5eefb976ca Mon Sep 17 00:00:00 2001
+From: Paul Lesniewski <paul@squirrelmail.org>
+Date: Sun, 17 Apr 2011 23:13:14 +0000
+Subject: [PATCH 18/50] Fix non-portable operator usage. Thanks to Emmanuel
+ Dreyfus.
+
+git-svn-id: https://svn.code.sf.net/p/squirrelmail/code/trunk/imap_proxy@14099 7612ce4b-ef26-0410-bec9-ea0150e637f0
+---
+ configure.in | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/configure.in b/configure.in
+index 030b1b2..e8b1921 100644
+--- a/configure.in
++++ b/configure.in
+@@ -121,7 +121,7 @@ dnl Check for curses
+ save_LIBS="$LIBS"
+ LIB_CURSES=""
+ AC_CHECK_LIB(curses, initscr, LIB_CURSES="-lcurses", [ curses_found=no ])
+-if test "$curses_found" == no; then
++if test "$curses_found" = no; then
+   AC_CHECK_LIB(ncurses, initscr, LIB_CURSES="-lncurses",
+  AC_ERROR([Can't compile without curses!!!]))
+ fi
+-- 
+2.7.4
+

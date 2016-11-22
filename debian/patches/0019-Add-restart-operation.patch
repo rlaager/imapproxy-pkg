@@ -1,0 +1,94 @@
+From 53dd03abc6075c36a6bd1c99ddb69df1e6303559 Mon Sep 17 00:00:00 2001
+From: Paul Lesniewski <paul@squirrelmail.org>
+Date: Mon, 18 Apr 2011 00:02:11 +0000
+Subject: [PATCH 19/50] Add restart operation
+
+git-svn-id: https://svn.code.sf.net/p/squirrelmail/code/trunk/imap_proxy@14100 7612ce4b-ef26-0410-bec9-ea0150e637f0
+---
+ scripts/imapproxy.init | 48 +++++++++++++++++++++++++++++++++---------------
+ 1 file changed, 33 insertions(+), 15 deletions(-)
+
+diff --git a/scripts/imapproxy.init b/scripts/imapproxy.init
+index 75e1845..5fc94bf 100755
+--- a/scripts/imapproxy.init
++++ b/scripts/imapproxy.init
+@@ -38,7 +38,7 @@
+ # Init file for squirrelmail-imap_proxy server daemon
+ #
+ # chkconfig: 2345 99 10
+-# description:  Imapproxy Daemon 
++# description:  IMAP Proxy Daemon 
+ #
+ # processname: in.imapproxyd
+ # config: /etc/imapproxy.conf
+@@ -46,35 +46,53 @@
+ Pgm=`/bin/basename $0`
+ PROXY_BIN=/usr/local/sbin/in.imapproxyd
+ 
+-case $1 in
+ 
+-    'start')
++start() {
+ 
+-	# make sure the executable exists.
++    # make sure the executable exists.
+ 
+-	if [ ! -f $PROXY_BIN ]; then
+-	    /bin/echo "$Pgm: $PROXY_BIN does not exist.  Not starting IMAP proxy server." 1>&2
+-	    exit 1
+-	fi
++    if [ ! -f $PROXY_BIN ]; then
++	/bin/echo "$Pgm: $PROXY_BIN does not exist.  Not starting IMAP proxy server." 1>&2
++	exit 1
++    fi
+ 
+-	/bin/echo "$Pgm: Starting IMAP proxy server." 1>&2
++    /bin/echo "$Pgm: Starting IMAP proxy server." 1>&2
+ 
+-	$PROXY_BIN
+-	;;
++    $PROXY_BIN
+ 
++}
+ 
+ 
+-    'stop')
++stop() {
++
++    /bin/echo "$Pgm: Shutting down IMAP proxy server." 1>&2
++
++    pkill -x in.imapproxyd
++
++}
++
+ 
+-	/bin/echo "$Pgm: Shutting down IMAP proxy server." 1>&2
++case $1 in
++
++    'start')
++	start
++	;;
+ 
+-	pkill -x in.imapproxyd
+ 
++
++    'stop')
++	stop
+ 	;;
+ 
+ 
++    'restart')
++        stop
++        start
++        ;;
++
++
+     *)
+-	/bin/echo "usage: $Pgm {start|stop}" 1>&2
++	/bin/echo "usage: $Pgm {start|stop|restart}" 1>&2
+ 
+ 	exit 0
+ 
+-- 
+2.7.4
+

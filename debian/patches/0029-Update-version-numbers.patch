@@ -1,0 +1,53 @@
+From 9c0b5ac62be2a6d406163f83750131beaa186c5a Mon Sep 17 00:00:00 2001
+From: Paul Lesniewski <paul@squirrelmail.org>
+Date: Tue, 3 Jan 2012 03:52:30 +0000
+Subject: [PATCH 29/50] Update version numbers
+
+git-svn-id: https://svn.code.sf.net/p/squirrelmail/code/trunk/imap_proxy@14259 7612ce4b-ef26-0410-bec9-ea0150e637f0
+---
+ imapproxy.spec   | 2 +-
+ include/common.h | 2 +-
+ pkginfo          | 2 +-
+ 3 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/imapproxy.spec b/imapproxy.spec
+index ff18554..7ff5148 100644
+--- a/imapproxy.spec
++++ b/imapproxy.spec
+@@ -1,6 +1,6 @@
+ #This is squirrelmail-imap_proxy rpm spec file
+ 
+-%define ver	1.2.7
++%define ver	1.2.8 [SVN]
+ %define rel	1
+ %define prefix	/usr/local
+ 
+diff --git a/include/common.h b/include/common.h
+index 4fccc05..99fb692 100644
+--- a/include/common.h
++++ b/include/common.h
+@@ -71,7 +71,7 @@
+ 
+ 
+ #define HASH_TABLE_SIZE         1024
+-#define IMAP_PROXY_VERSION      "1.2.7"
++#define IMAP_PROXY_VERSION      "1.2.8 [SVN]"
+ 
+ /*
+  * Misc. function prototypes.
+diff --git a/pkginfo b/pkginfo
+index 2683be6..2add477 100644
+--- a/pkginfo
++++ b/pkginfo
+@@ -1,7 +1,7 @@
+ PKG=squirrelmail-imap_proxy
+ NAME=SquirrelMail IMAP Proxy
+ ARCH=sparc
+-VERSION=1.2.7
++VERSION=1.2.8 [SVN]
+ CATEGORY=application
+ VENDOR=imapproxy.org
+ DESC=This is a connection caching IMAP proxy daemon for proxied IMAP connections
+-- 
+2.7.4
+

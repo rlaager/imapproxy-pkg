@@ -1,0 +1,35 @@
+From 8628dd8f664263d6dc6703766ebebb1d11a39266 Mon Sep 17 00:00:00 2001
+From: Paul Lesniewski <paul@squirrelmail.org>
+Date: Mon, 12 Sep 2016 17:10:30 +0000
+Subject: [PATCH 36/50] Software has no gender
+
+git-svn-id: https://svn.code.sf.net/p/squirrelmail/code/trunk/imap_proxy@14559 7612ce4b-ef26-0410-bec9-ea0150e637f0
+---
+ scripts/imapproxy.conf | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/scripts/imapproxy.conf b/scripts/imapproxy.conf
+index 3230b10..35fc712 100644
+--- a/scripts/imapproxy.conf
++++ b/scripts/imapproxy.conf
+@@ -99,7 +99,7 @@ proc_groupname nobody
+ ##
+ ## This is the path to the filename that the proxy server mmap()s to
+ ## write statistical data to.  This is the file that pimpstat needs to
+-## look at to be able to provide his useful stats.
++## look at to be able to provide its useful stats.
+ #
+ stat_filename /var/run/pimpstats
+ 
+@@ -159,7 +159,7 @@ enable_select_cache no
+ #
+ ## foreground_mode
+ ##
+-## This will prevent squirrelmail-imap_proxy from detaching from his parent
++## This will prevent squirrelmail-imap_proxy from detaching from its parent
+ ## process and controlling terminal on startup.
+ #
+ foreground_mode no
+-- 
+2.7.4
+

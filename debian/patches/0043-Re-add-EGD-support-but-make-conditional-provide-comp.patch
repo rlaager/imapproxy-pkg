@@ -1,0 +1,129 @@
+From 3ab9562562d5520925999496ae9b3d73e86ad149 Mon Sep 17 00:00:00 2001
+From: Paul Lesniewski <paul@squirrelmail.org>
+Date: Wed, 14 Sep 2016 01:14:41 +0000
+Subject: [PATCH 43/50] Re-add EGD support, but make conditional, provide
+ compatibility with LibreSSL, other small fixes provided by the BSD team
+
+git-svn-id: https://svn.code.sf.net/p/squirrelmail/code/trunk/imap_proxy@14566 7612ce4b-ef26-0410-bec9-ea0150e637f0
+---
+ ChangeLog           |  3 ++-
+ Makefile.in         |  2 +-
+ configure.in        | 12 ++++++------
+ include/imapproxy.h |  1 +
+ src/main.c          |  9 +++++++--
+ src/threads.c       |  3 +++
+ 6 files changed, 20 insertions(+), 10 deletions(-)
+
+diff --git a/ChangeLog b/ChangeLog
+index 8af7a02..22ce5e8 100644
+--- a/ChangeLog
++++ b/ChangeLog
+@@ -1,7 +1,8 @@
+ 2016-09-12  Paul Lesniewski <paul@squirrelmail.org>
+ 	* Added support for systemd startup
+ 	* Added support for accepting pre-auth ID commands (RFC 2971)
+-	* Removed EGD support (thanks to Loganaden Velvindron)
++	* Make EGD support conditional, provide compatibility with
++	  LibreSSL, other small fixes provided by the BSD team
+ 
+ 2014-01-20  Paul Lesniewski <paul@squirrelmail.org>
+ 	* Added support for up to TLS v1.2 (thanks to Emmanuel Dreyfus)
+diff --git a/Makefile.in b/Makefile.in
+index f2f83de..5bab585 100644
+--- a/Makefile.in
++++ b/Makefile.in
+@@ -70,7 +70,7 @@ $(XYD_BIN): $(XYD_OBJ)
+ 	$(CC) -o $@ $(XYD_OBJ) $(LDFLAGS) $(XYD_LIB)
+ 
+ $(TAT_BIN): $(TAT_OBJ)
+-	$(CC) -o $@ $(TAT_OBJ) $(TAT_LIB)
++	$(CC) -o $@ $(TAT_OBJ) $(LDFLAGS) $(TAT_LIB)
+ 
+ clean:
+ 	rm -f ./src/core  $(XYD_OBJ) $(TAT_OBJ) $(XYD_BIN) $(TAT_BIN)
+diff --git a/configure.in b/configure.in
+index e8b1921..039895b 100644
+--- a/configure.in
++++ b/configure.in
+@@ -14,12 +14,7 @@ AC_CANONICAL_SYSTEM()
+ 
+ 
+ dnl Check for BSD sockets
+-AC_CHECK_FUNC(connect, ,
+-	AC_CHECK_LIB(nsl, gethostbyname, ,)
+-	AC_CHECK_LIB(socket, connect, ,
+-		AC_ERROR([Can't compile without BSD sockets!!!])
+-	)
+-)
++AC_CHECK_FUNC([socket], , [AC_CHECK_LIB(socket, socket, , exit)])
+ 
+ 
+ dnl Check for pthreads
+@@ -116,6 +111,9 @@ AC_CHECK_LIB(ssl, SSL_new, ,
+ 	AC_WARN([OpenSSL library not found!!!  STARTTLS will be disabled.]),
+ 	-lcrypto)
+ 
++AC_CHECK_LIB(crypto, RAND_egd, 
++	AC_DEFINE(HAVE_RAND_EGD, 1, [Define if the libcrypto has RAND_egd])
++)
+ 
+ dnl Check for curses
+ save_LIBS="$LIBS"
+@@ -130,6 +128,8 @@ LIBS="$save_LIBS"
+ AC_SUBST(LIB_CURSES)
+ 
+ 
++eval expanded_sysconfdir="\"$sysconfdir\""
++AC_DEFINE_UNQUOTED(DEFAULT_CONFIG_FILE, "$expanded_sysconfdir/imapproxyd.conf", [default location of config file])
+ AC_CONFIG_HEADER(config.h)
+ 
+ 
+diff --git a/include/imapproxy.h b/include/imapproxy.h
+index 128deb2..34a01e9 100644
+--- a/include/imapproxy.h
++++ b/include/imapproxy.h
+@@ -148,6 +148,7 @@
+ 
+ #if HAVE_LIBSSL
+ #include <openssl/ssl.h>
++#include <openssl/md5.h>
+ #include <openssl/rand.h>
+ #include <limits.h>
+ #endif
+diff --git a/src/main.c b/src/main.c
+index 7cadbc5..5707b13 100644
+--- a/src/main.c
++++ b/src/main.c
+@@ -452,8 +452,13 @@ int main( int argc, char *argv[] )
+     /* Set up OpenSSL thread protection */
+     ssl_thread_setup(fn);
+ 
+-    if ( RAND_load_file( f_randfile, -1 ) )
+-	RAND_write_file( f_randfile );
++#ifndef HAVE_RAND_EGD
++    if ( RAND_egd( ( RAND_file_name( f_randfile, sizeof( f_randfile ) ) == f_randfile ) ? f_randfile : "/.rnd" ) ) 
++#endif
++    {
++	if ( RAND_load_file( f_randfile, -1 ) )
++	    RAND_write_file( f_randfile );
++    }
+ 
+     SSL_load_error_strings();
+ 
+diff --git a/src/threads.c b/src/threads.c
+index 7ead4e2..1129501 100644
+--- a/src/threads.c
++++ b/src/threads.c
+@@ -39,6 +39,9 @@
+ 
+ #define OPENSSL_THREAD_DEFINES
+ #include <openssl/opensslconf.h>
++#if defined(THREADS)
++#define OPENSSL_THREADS
++#endif
+ #if defined(OPENSSL_THREADS)
+ 
+ 
+-- 
+2.7.4
+

@@ -1,0 +1,64 @@
+From fdec2df95da76d31319bccce40fcc619830c30b9 Mon Sep 17 00:00:00 2001
+From: Paul Lesniewski <paul@squirrelmail.org>
+Date: Mon, 12 Sep 2016 19:42:38 +0000
+Subject: [PATCH 38/50] Add systemd startup installation option
+
+git-svn-id: https://svn.code.sf.net/p/squirrelmail/code/trunk/imap_proxy@14561 7612ce4b-ef26-0410-bec9-ea0150e637f0
+---
+ Makefile.in                |  3 +++
+ README                     |  4 ++++
+ scripts/imap_proxy.service | 13 +++++++++++++
+ 3 files changed, 20 insertions(+)
+ create mode 100644 scripts/imap_proxy.service
+
+diff --git a/Makefile.in b/Makefile.in
+index abdac2d..f2f83de 100644
+--- a/Makefile.in
++++ b/Makefile.in
+@@ -88,6 +88,9 @@ install-init-linux:
+ 	ln -s ../init.d/imapproxy $(DESTDIR)/etc/rc2.d/S99imapproxy
+ 	ln -s ../init.d/imapproxy $(DESTDIR)/etc/rc0.d/K10imapproxy
+ 
++install-init-systemd:
++	$(INSTALL) -o root -g root -m 0644 ./scripts/imap_proxy.service $(DESTDIR)/lib/systemd/system
++
+ install-conf:
+ 	$(INSTALL) -o root -g bin -m 0644 ./scripts/imapproxy.conf $(DESTDIR)$(ETC)
+ 
+diff --git a/README b/README
+index 7d443a0..bb22f2c 100644
+--- a/README
++++ b/README
+@@ -42,6 +42,10 @@ a bug report.
+ 
+ /etc/imapproxy.conf
+ 
++"make install-init-systemd" will attempt to install the systemd startup script:
++
++/lib/systemd/system/imap_proxy.service
++
+ "make install-init" will attempt to install the startup script and symlinks:
+ 
+ /etc/init.d/imapproxy
+diff --git a/scripts/imap_proxy.service b/scripts/imap_proxy.service
+new file mode 100644
+index 0000000..444b95e
+--- /dev/null
++++ b/scripts/imap_proxy.service
+@@ -0,0 +1,13 @@
++[Unit]
++Description=SquirrelMail IMAP proxy server
++After=network.target network-online.target local-fs.target syslog.target remote-fs.target
++
++[Service]
++Type=forking
++ExecStart=/usr/local/sbin/in.imapproxyd
++Restart=always
++RestartSec=5
++
++[Install]
++WantedBy=multi-user.target
++
+-- 
+2.7.4
+

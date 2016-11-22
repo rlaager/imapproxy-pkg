@@ -1,0 +1,73 @@
+From e28b5d875274fc1303fc4e78b838d03823fcf9af Mon Sep 17 00:00:00 2001
+From: Paul Lesniewski <paul@squirrelmail.org>
+Date: Fri, 29 Oct 2010 01:41:05 +0000
+Subject: [PATCH 07/50] Fix possible buffer overflow issue and a few other
+ small issues, complements Jose Celestino.  Thanks also to Tomas Lindroos
+
+git-svn-id: https://svn.code.sf.net/p/squirrelmail/code/trunk/imap_proxy@14071 7612ce4b-ef26-0410-bec9-ea0150e637f0
+---
+ ChangeLog     | 4 ++++
+ src/main.c    | 6 +++++-
+ src/request.c | 2 +-
+ src/select.c  | 2 +-
+ 4 files changed, 11 insertions(+), 3 deletions(-)
+
+diff --git a/ChangeLog b/ChangeLog
+index 3d7c405..95ccc28 100644
+--- a/ChangeLog
++++ b/ChangeLog
+@@ -1,4 +1,8 @@
+ 2010-10-28  Paul Lesniewski <paul@squirrelmail.org>
++	* Fixed possible buffer overflow issue and a few other small
++          issues, complements Jose Celestino.  Thanks also to Tomas
++          Lindroos.
++
+ 	* Fixed LOGIN command so that it handles literal arguments
+           correctly.
+ 
+diff --git a/src/main.c b/src/main.c
+index 757d0ac..c0ceb21 100644
+--- a/src/main.c
++++ b/src/main.c
+@@ -680,7 +680,11 @@ int main( int argc, char *argv[] )
+ 	     IMAPCount->PeakClientConnections )
+ 	    IMAPCount->PeakClientConnections = IMAPCount->CurrentClientConnections;
+ 	
+-	pthread_create( &ThreadId, &attr, (void *)HandleRequest, (void *)clientsd );
++	rc = pthread_create( &ThreadId, &attr, (void *)HandleRequest, (void *)clientsd );
++	if (rc != 0) {
++	    syslog(LOG_ERR, "%s: pthread_create() returned error [%d] for HandleRequest.", fn, rc );
++	    close(clientsd);
++	}
+ 	
+     }
+ }
+diff --git a/src/request.c b/src/request.c
+index 59ce9b2..9e69503 100644
+--- a/src/request.c
++++ b/src/request.c
+@@ -768,7 +768,7 @@ static int cmd_authenticate_login( ITD_Struct *Client,
+     /*
+      * Same drill all over again, except this time it's for the password.
+      */
+-    snprintf( Password, BufLen, "Password:" );
++    snprintf( Password, MAXPASSWDLEN - 1, "Password:" );
+     
+     EVP_EncodeBlock( EncodedPassword, Password, strlen( Password ) );
+     
+diff --git a/src/select.c b/src/select.c
+index b6f8514..3467c54 100644
+--- a/src/select.c
++++ b/src/select.c
+@@ -339,7 +339,7 @@ static int Populate_Select_Cache( ITD_Struct *Server,
+ 	if ( Server->LiteralBytesRemaining )
+ 	{
+ 	    syslog( LOG_ERR, "%s: Server response to SELECT command contains unexpected literal data on sd [%d].",
+-	        fn, Server->conn );
++	        fn, Server->conn->sd );
+ 	    /*
+ 	     * Must eat the literal.
+ 	     */
+-- 
+2.7.4
+

@@ -1,0 +1,262 @@
+From fafb868ac6c184661b3dc11f26b23dbb7b3c3048 Mon Sep 17 00:00:00 2001
+From: Paul Lesniewski <paul@squirrelmail.org>
+Date: Mon, 20 Jan 2014 09:47:13 +0000
+Subject: [PATCH 32/50] Added support for up to TLS v1.2; added support for
+ ECDHE ciphers; added ability to manually specify TLS ciphers; added server
+ certificate validation (all thanks to Emmanuel Dreyfus)
+
+git-svn-id: https://svn.code.sf.net/p/squirrelmail/code/trunk/imap_proxy@14426 7612ce4b-ef26-0410-bec9-ea0150e637f0
+---
+ ChangeLog              |  6 ++++++
+ README                 | 30 ++++++++++++++++++++++++++++++
+ README.ssl             | 15 ++++++++++++---
+ include/imapproxy.h    |  5 +++++
+ scripts/imapproxy.conf | 16 ++++++++++++++--
+ src/config.c           | 15 +++++++++++++++
+ src/main.c             | 48 ++++++++++++++++++++++++++++++++++++++++++++----
+ 7 files changed, 126 insertions(+), 9 deletions(-)
+
+diff --git a/ChangeLog b/ChangeLog
+index 3a5c7b5..20f66ad 100644
+--- a/ChangeLog
++++ b/ChangeLog
+@@ -1,3 +1,9 @@
++2014-01-20  Paul Lesniewski <paul@squirrelmail.org>
++	* Added support for up to TLS v1.2 (thanks to Emmanuel Dreyfus)
++	* Added support for ECDHE ciphers (thanks to Emmanuel Dreyfus)
++	* Added ability to manually specify TLS ciphers (thanks to Emmanuel Dreyfus)
++	* Added server certificate validation (thanks to Emmanuel Dreyfus)
++
+ 2012-01-01  Paul Lesniewski <paul@squirrelmail.org>
+ 	* Fixed problem where default TLS CA data would never
+ 	  be loaded (thanks to Orion Poplawski)
+diff --git a/README b/README
+index 9753247..1ee4bec 100644
+--- a/README
++++ b/README
+@@ -164,6 +164,36 @@ tls_key_file
+ File containing the private key belonging to the client certificate.  See
+ README.ssl for more information.
+ 
++tls_verify_server
++-----------------
++Indicates that the server's TLS certificate must be verified.  See
++README.ssl for more information.
++
++tls_ciphers
++-----------
++Allows you to manually specify TLS cipher suite as documented in openssl
++ciphers(1).  See README.ssl for more information.
++
++tls_no_tlsv1
++------------
++Prevents the usage of TLS v1 (SSL v2 and v3 are already forbidden, which
++is hard coded).  See README.ssl for more information.
++
++tls_no_tlsv1.1
++--------------
++Prevents the usage of TLS v1.1 (SSL v2 and v3 are already forbidden, which
++is hard coded).  See README.ssl for more information.
++
++tls_no_tlsv1.2
++--------------
++Prevents the usage of TLS v1.2 (SSL v2 and v3 are already forbidden, which
++is hard coded).  See README.ssl for more information.
++
++force_tls
++---------
++Requires STARTTLS support by the server (won't use unsecured connections).
++See README.ssl for more information.
++
+ enable_select_cache
+ -------------------
+ Allows SELECT data caching to be enabled or disabled.
+diff --git a/README.ssl b/README.ssl
+index 2a6c44c..31a6687 100644
+--- a/README.ssl
++++ b/README.ssl
+@@ -22,9 +22,18 @@ to that server and let squirrelmail-imap_proxy talk to the local (plaintext)
+ end of that tunnel (in which case, no SSL setup is required for
+ squirrelmail-imap_proxy).
+ 
+-There are four configuration file options that you'll have to set in order
+-for SSL to work.  They are tls_ca_file, tls_ca_path, tls_cert_file and
+-tls_key_file.
++Here are the options related to SSL configuration:
++tls_ca_file        Path to CA file
++tls_ca_path        Path to CA directory
++tls_cert_file      Path to client certificate file
++tls_key_file       Path to client private key
++tls_verify_server  Enforce server certificate validation (default is false)
++tls_ciphers        Specify cipher suite as documented in openssl_ciphers(1)
++tls_no_tlsv1       Disable TLSv1.0 (default is false)
++tls_no_tlsv1.1     Disable TLSv1.1 (default is false)
++tls_no_tlsv1.2     Disable TLSv1.2 (default is false)
++force_tls          Force TLS usage (default is false)
++
+ 
+ I haven't had time to write my own ssl tuturial (and I might never) but you
+ can find a wealth of information here:
+diff --git a/include/imapproxy.h b/include/imapproxy.h
+index 5a64d43..5748108 100644
+--- a/include/imapproxy.h
++++ b/include/imapproxy.h
+@@ -294,6 +294,11 @@ struct ProxyConfig
+     char *tls_ca_path;                        /* path to directory CA certs */
+     char *tls_cert_file;                      /* file with client cert */
+     char *tls_key_file;                       /* file with client priv key */
++    char *tls_ciphers;                        /* TLS Cipher suite */
++    unsigned int tls_verify_server;           /* flag to require server cert validation */
++    unsigned int tls_no_tlsv1;                /* flag to disable TLSv1 */
++    unsigned int tls_no_tlsv1_1;              /* flag to disable TLSv1.1 */
++    unsigned int tls_no_tlsv1_2;              /* flag to disable TLSv1.2 */
+     unsigned int force_tls;                   /* flag to force TLS */
+     unsigned int enable_admin_commands;       /* flag to enable admin cmds */
+     unsigned char support_unselect;           /* unselect support flag */
+diff --git a/scripts/imapproxy.conf b/scripts/imapproxy.conf
+index 1ae6746..3230b10 100644
+--- a/scripts/imapproxy.conf
++++ b/scripts/imapproxy.conf
+@@ -168,7 +168,8 @@ foreground_mode no
+ #
+ ## force_tls
+ ##
+-## Force squirrelmail-imap_proxy to use STARTTLS even if LOGIN is not disabled.
++## Force squirrelmail-imap_proxy to use STARTTLS even if LOGIN is not
++## disabled (unsecured connections will not be used).
+ #
+ force_tls no
+ 
+@@ -211,12 +212,23 @@ enable_admin_commands no
+ 
+ 
+ #
+-## Various path options for SSL CA certificates/directories
++## TLS configuration options
+ #
+ #tls_ca_file /usr/share/ssl/certs/ca-bundle.crt
+ #tls_ca_path /usr/share/ssl/certs/
+ #tls_cert_file /usr/share/ssl/certs/mycert.crt
+ #tls_key_file /usr/share/ssl/certs/mycert.key
++#tls_verify_server no
++#tls_ciphers ALL:!aNULL:!eNULL
++
++
++#
++## Set any of these to "yes" if the corresponding TLS
++## version is not sufficiently secure for your needs
++#
++#tls_no_tlsv1 no
++#tls_no_tlsv1.1 no
++#tls_no_tlsv1.2 no
+ 
+ 
+ #
+diff --git a/src/config.c b/src/config.c
+index 21c27af..58454ba 100644
+--- a/src/config.c
++++ b/src/config.c
+@@ -435,6 +435,21 @@ extern void SetConfigOptions( char *ConfigFile )
+     ADD_TO_TABLE( "tls_key_file", SetStringValue,
+ 		  &PC_Struct.tls_key_file, index );
+ 
++    ADD_TO_TABLE( "tls_ciphers", SetStringValue,
++		  &PC_Struct.tls_ciphers, index );
++
++    ADD_TO_TABLE( "tls_verify_server", SetBooleanValue,
++		  &PC_Struct.tls_verify_server, index );
++
++    ADD_TO_TABLE( "tls_no_tlsv1", SetBooleanValue,
++		  &PC_Struct.tls_no_tlsv1, index );
++
++    ADD_TO_TABLE( "tls_no_tlsv1.1", SetBooleanValue,
++		  &PC_Struct.tls_no_tlsv1_1, index );
++
++    ADD_TO_TABLE( "tls_no_tlsv1.2", SetBooleanValue,
++		  &PC_Struct.tls_no_tlsv1_2, index );
++
+     ADD_TO_TABLE( "send_tcp_keepalives", SetBooleanValue,
+ 		  &PC_Struct.send_tcp_keepalives, index );
+ 
+diff --git a/src/main.c b/src/main.c
+index afbdecd..352b3fb 100644
+--- a/src/main.c
++++ b/src/main.c
+@@ -302,6 +302,9 @@ int main( int argc, char *argv[] )
+ #ifdef HAVE_LIBWRAP
+     struct request_info r;             /* request struct for libwrap */
+ #endif
++#if HAVE_LIBSSL
++    int tls_options;
++#endif
+     struct addrinfo aihints, *ai;
+     int gaierrnum;
+ 
+@@ -458,15 +461,33 @@ int main( int argc, char *argv[] )
+     }
+ 
+     SSL_load_error_strings();
+-    tls_ctx = SSL_CTX_new( TLSv1_client_method() );
++
++    /* 
++     * Despite its name, SSLv23_client_method() negociates highest
++     * version possible, which includes TLSv1.0, TLSv1.1, and TLSv1.2. 
++     * SSLv2 and SSLv3 are disabled using SSL_OP_NO_SSLv2 and 
++     * SSL_OP_NO_SSLv3 below.
++     */ 
++    tls_ctx = SSL_CTX_new( SSLv23_client_method() );
+     if ( tls_ctx == NULL )
+     { 
+ 	syslog(LOG_ERR, "%s: Failed to create new SSL_CTX.  Exiting.", fn);
+ 	exit( 1 );
+     }
+  
+-    /* Work around all known bugs */
+-    SSL_CTX_set_options( tls_ctx, SSL_OP_ALL );
++    /* Work around all known bugs, disable SSLv2 and SSLv3 */
++    tls_options = SSL_OP_ALL | SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3;
++
++    if ( PC_Struct.tls_no_tlsv1 ) 
++        tls_options |= SSL_OP_NO_TLSv1;
++
++    if ( PC_Struct.tls_no_tlsv1_1 ) 
++        tls_options |= SSL_OP_NO_TLSv1_1;
++
++    if ( PC_Struct.tls_no_tlsv1_2 ) 
++        tls_options |= SSL_OP_NO_TLSv1_2;
++
++    SSL_CTX_set_options( tls_ctx, tls_options );
+  
+     if ( PC_Struct.tls_ca_file != NULL || PC_Struct.tls_ca_path != NULL )
+     {
+@@ -492,7 +513,26 @@ int main( int argc, char *argv[] )
+ 	exit( 1 );
+     }
+ 
+-    SSL_CTX_set_verify(tls_ctx, SSL_VERIFY_NONE, verify_callback);
++    if ( PC_Struct.tls_verify_server ) 
++        SSL_CTX_set_verify(tls_ctx, SSL_VERIFY_PEER, verify_callback);
++    else
++        SSL_CTX_set_verify(tls_ctx, SSL_VERIFY_NONE, verify_callback);
++
++    if ( PC_Struct.tls_ciphers != NULL )
++    {
++        SSL_CTX_set_cipher_list( tls_ctx, PC_Struct.tls_ciphers );    
++    }
++
++    /* Enable ECDHE is OpenSSL has it */
++#ifdef NID_X9_62_prime256v1
++    {
++        EC_KEY *ecdh;
++
++        ecdh = EC_KEY_new_by_curve_name( NID_X9_62_prime256v1 );
++        SSL_CTX_set_tmp_ecdh( tls_ctx, ecdh );
++        EC_KEY_free( ecdh );
++    }
++#endif
+ #endif /* HAVE_LIBSSL */
+ 
+ 
+-- 
+2.7.4
+

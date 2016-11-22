@@ -1,0 +1,800 @@
+From 7bc614a3824452f69de69980d0c3670e92688f05 Mon Sep 17 00:00:00 2001
+From: Paul Lesniewski <paul@squirrelmail.org>
+Date: Mon, 17 Jan 2011 07:23:25 +0000
+Subject: [PATCH 12/50] Add the ability to authenticate to the IMAP server
+ using SASL plain authentication with fixed authentication credentials (thanks
+ to Jeffrey Arbuckle and Martin Smith)
+
+git-svn-id: https://svn.code.sf.net/p/squirrelmail/code/trunk/imap_proxy@14087 7612ce4b-ef26-0410-bec9-ea0150e637f0
+---
+ ChangeLog              |   5 +
+ include/imapproxy.h    |   3 +
+ scripts/imapproxy.conf |  20 +++
+ src/config.c           |   9 ++
+ src/imapcommon.c       | 335 ++++++++++++++++++++++++++++++++++++-------------
+ src/main.c             | 231 +++++++++++++++++++++++++---------
+ src/request.c          |  15 +++
+ 7 files changed, 473 insertions(+), 145 deletions(-)
+
+diff --git a/ChangeLog b/ChangeLog
+index 76e901e..06f66fd 100644
+--- a/ChangeLog
++++ b/ChangeLog
+@@ -1,3 +1,8 @@
++2011-01-16  Paul Lesniewski <paul@squirrelmail.org>
++	* Added the ability to authenticate to the IMAP server
++          using SASL plain authentication with fixed authentication
++          credentials (thanks to Jeffrey Arbuckle and Martin Smith)
++
+ 2010-10-29  Paul Lesniewski <paul@squirrelmail.org>
+ 	* Fixed compilation warnings when openssl is not available.
+ 
+diff --git a/include/imapproxy.h b/include/imapproxy.h
+index d6ff26e..6fc8034 100644
+--- a/include/imapproxy.h
++++ b/include/imapproxy.h
+@@ -299,6 +299,9 @@ struct ProxyConfig
+     unsigned char support_starttls;           /* starttls support flag */
+     unsigned char login_disabled;             /* login disabled flag */
+     char *chroot_directory;                   /* chroot(2) into this dir */
++    char *auth_sasl_plain_username;           /* authentication username under SASL PLAIN */
++    char *auth_sasl_plain_password;           /* authentication password under SASL PLAIN */
++    char *auth_shared_secret;                 /* REQUIRED shared secret in leiu of a user password when using LOGIN command with SASL PLAIN authentication */
+ };
+ 
+ 
+diff --git a/scripts/imapproxy.conf b/scripts/imapproxy.conf
+index fda8f14..59cf58a 100644
+--- a/scripts/imapproxy.conf
++++ b/scripts/imapproxy.conf
+@@ -197,3 +197,23 @@ enable_admin_commands no
+ #tls_ca_path /usr/share/ssl/certs/
+ #tls_cert_file /usr/share/ssl/certs/mycert.crt
+ #tls_key_file /usr/share/ssl/certs/mycert.key
++
++
++#
++## Authenticate using SASL AUTHENTICATE PLAIN
++##
++## The following authentication username and password are used
++## along with the username from the client as the authorization
++## identity.  In order to avoid having the service wide open (no
++## password needed from the client), the client is required to
++## send the auth_shared_secret in leiu of a user password.
++##
++## NOTE: This functionality *assumes* that the server supports
++##       AUTHENTICATE PLAIN, and it does *not* verify this by
++##       looking at the server's capabilities list.
++#
++#auth_sasl_plain_username
++#auth_sasl_plain_password
++#auth_shared_secret
++
++
+diff --git a/src/config.c b/src/config.c
+index efb62f9..848142a 100644
+--- a/src/config.c
++++ b/src/config.c
+@@ -393,6 +393,15 @@ extern void SetConfigOptions( char *ConfigFile )
+     ADD_TO_TABLE( "cache_expiration_time", SetNumericValue, 
+ 		  &PC_Struct.cache_expiration_time, index );
+ 
++    ADD_TO_TABLE( "auth_sasl_plain_username", SetStringValue,
++		  &PC_Struct.auth_sasl_plain_username, index );
++    
++    ADD_TO_TABLE( "auth_sasl_plain_password", SetStringValue,
++		  &PC_Struct.auth_sasl_plain_password, index );
++
++    ADD_TO_TABLE( "auth_shared_secret", SetStringValue,
++		  &PC_Struct.auth_shared_secret, index);
++
+     ADD_TO_TABLE( "proc_username", SetStringValue,
+ 		  &PC_Struct.proc_username, index );
+     
+diff --git a/src/imapcommon.c b/src/imapcommon.c
+index 2dec217..cf45a9a 100644
+--- a/src/imapcommon.c
++++ b/src/imapcommon.c
+@@ -338,7 +338,155 @@ extern void UnLockMutex( pthread_mutex_t *mutex )
+     return;
+ }
+ 
+-    
++
++/*++
++ * Function:	Attempt_STARTTLS
++ *
++ * Purpose:	Upgrade plain text connection/negotiate STARTTLS
++ *
++ * Parameters:	ptr to an IMAPTransactionDescriptor structure
++ *
++ * Returns:	0 on success
++ *         	-1 on failure
++ *
++ * Authors:	Dave McMurtrie <davemcmurtrie@hotmail.com>
++ *
++ * Notes: 	This function assumes that SSL support has already
++ *       	been initialized.
++ * 
++ *        	This function is a result of re-factoring of existing
++ *       	code resulting from a patch submitted by Martin B.
++ *       	Smith <smithmb@ufl.edu>
++ *--
++ */
++#if HAVE_LIBSSL
++extern int Attempt_STARTTLS( ITD_Struct *Server )
++{
++    char *fn = "Attempt_STARTTLS()";
++
++    unsigned int BufLen = BUFSIZE - 1;
++    char SendBuf[BUFSIZE];
++    char *tokenptr;
++    char *endptr;
++    char *last;
++    int rc;
++
++
++    syslog( LOG_INFO, "%s: Enabling STARTTLS.", fn );
++
++	snprintf( SendBuf, BufLen, "S0001 STARTTLS\r\n" );
++	if ( IMAP_Write( Server->conn, SendBuf, strlen(SendBuf) ) == -1 )
++	{
++	    syslog(LOG_INFO, "STARTTLS failed: IMAP_Write() failed attempting to send STARTTLS command to IMAP server: %s", strerror( errno ) );
++	    goto fail;
++	}
++
++	/*
++	 * Read the server response
++	 */
++	if ( ( rc = IMAP_Line_Read( Server ) ) == -1 )
++	{
++	    syslog(LOG_INFO, "STARTTLS failed: No response from IMAP server after sending STARTTLS command" );
++	    goto fail;
++	}
++
++	if ( Server->LiteralBytesRemaining )
++	{
++	    syslog(LOG_ERR, "%s: Unexpected string literal in server response.", fn );
++	    goto fail;
++	}
++
++
++	/*
++	 * Try to match up the tag in the server response to the client tag.
++	 */
++	endptr = Server->ReadBuf + rc;
++
++	tokenptr = memtok( Server->ReadBuf, endptr, &last );
++
++	if ( !tokenptr )
++	{
++	    /*
++	     * no tokens found in server response?  Not likely, but we still
++	     * have to check.
++	     */
++	    syslog(LOG_INFO, "STARTTLS failed: server response to STARTTLS command contained no tokens." );
++	    goto fail;
++	}
++
++	if ( memcmp( (const void *)tokenptr, (const void *)"S0001",
++			strlen( tokenptr ) ) )
++	{
++	    /*
++	     * non-matching tag read back from the server... Lord knows what this
++	     * is, so we'll fail.
++	     */
++	    syslog(LOG_INFO, "STARTTLS failed: server response to STARTTLS command contained non-matching tag." );
++	    goto fail;
++	}
++
++	/*
++	 * Now that we've matched the tags up, see if the response was 'OK'
++	 */
++	tokenptr = memtok( NULL, endptr, &last );
++
++	if ( !tokenptr )
++	{
++	    /* again, not likely but we still have to check... */
++	    syslog(LOG_INFO, "STARTTLS failed: Malformed server response to STARTTLS command" );
++	    goto fail;
++	}
++
++	if ( memcmp( (const void *)tokenptr, "OK", 2 ) )
++	{
++	    /*
++	     * If the server sent back a "NO" or "BAD", we can look at the actual
++	     * server logs to figure out why.  We don't have to break our ass here
++	     * putting the string back together just for the sake of logging.
++	     */
++	    syslog(LOG_INFO, "STARTTLS failed: non-OK server response to STARTTLS command" );
++	    goto fail;
++	}
++
++	Server->conn->tls = SSL_new( tls_ctx );
++	if ( Server->conn->tls == NULL )
++	{
++	    syslog(LOG_INFO, "STARTTLS failed: SSL_new() failed" );
++	    goto fail;
++	}
++
++	SSL_clear( Server->conn->tls );
++	rc = SSL_set_fd( Server->conn->tls, Server->conn->sd );
++	if ( rc == 0 )
++	{
++	    syslog(LOG_INFO,
++		    "STARTTLS failed: SSL_set_fd() failed: %d",
++		    SSL_get_error( Server->conn->tls, rc ) );
++	    goto fail;
++	}
++
++	SSL_set_connect_state( Server->conn->tls );
++	rc = SSL_connect( Server->conn->tls );
++	if ( rc <= 0 )
++	{
++	    syslog(LOG_INFO,
++		    "STARTTLS failed: SSL_connect() failed, %d: %s",
++		    SSL_get_error( Server->conn->tls, rc ), SSLerrmessage() );
++	    goto fail;
++	}
++
++	return 0;
++
++  fail:
++    if ( Server->conn->tls )
++    {
++	SSL_shutdown( Server->conn->tls );
++	SSL_free( Server->conn->tls );
++    }
++    return -1;
++}
++#endif
++
+ 
+ /*++
+  * Function:	Get_Server_conn
+@@ -374,6 +522,11 @@ extern ICD_Struct *Get_Server_conn( char *Username,
+     unsigned int HashIndex;
+     ICC_Struct *HashEntry = NULL;
+     char SendBuf[BUFSIZE];
++
++    char EncodedAuthBuf[BUFSIZE];
++    char AuthBuf[BUFSIZE];
++    char AuthBufIndex;
++
+     unsigned int BufLen = BUFSIZE - 1;
+     char md5pw[MD5_DIGEST_LENGTH];
+     char *tokenptr;
+@@ -507,6 +660,10 @@ extern ICD_Struct *Get_Server_conn( char *Username,
+     
+     UnLockMutex( &mp );
+     
++    syslog( LOG_INFO,
++	    "LOGIN: '%s' (%s:%s) no previous connection: creating a new one",
++	    Username, ClientAddr, portstr);
++
+     /*
+      * We don't have an active connection for this user, or the password
+      * didn't match.
+@@ -572,116 +729,114 @@ extern ICD_Struct *Get_Server_conn( char *Username,
+ #if HAVE_LIBSSL
+     if ( PC_Struct.login_disabled || PC_Struct.force_tls )
+     {
+-	snprintf( SendBuf, BufLen, "S0001 STARTTLS\r\n" );
+-	if ( IMAP_Write( Server.conn, SendBuf, strlen(SendBuf) ) == -1 )
++	if ( Attempt_STARTTLS( &Server ) != 0 )
+ 	{
+-	    syslog(LOG_INFO, "STARTTLS failed: IMAP_Write() failed attempting to send STARTTLS command to IMAP server: %s", strerror( errno ) );
+ 	    goto fail;
+ 	}
+ 
++	/* XXX Should we grab the session id for later reuse? */
++    }
++#endif /* HAVE_LIBSSL */
++
++
++    /*
++     * If configured to do so, execute SASL PLAIN authentication
++     * using the static authentication username and password from
++     * configuration (auth_sasl_plain_username/auth_sasl_plain_password).
++     *
++     * Note that because this means no password is required from
++     * the client, we won't allow this means of authentication
++     * without the client sending a shared secret instead, which
++     * must match what's in the configuration (auth_shared_secret).
++     */
++    if ( PC_Struct.auth_sasl_plain_username
++	&& PC_Struct.auth_sasl_plain_password
++	&& PC_Struct.auth_shared_secret )
++    {
+ 	/*
+-	 * Read the server response
++	 * Check shared secret first (accounting for when a password
++	 * is wrapped in quotes)
+ 	 */
+-	if ( ( rc = IMAP_Line_Read( &Server ) ) == -1 )
++	if ( *Password == '"' && *(Password + strlen( Password ) - 1) == '"' )
++	    rc = strncmp( Password + 1, PC_Struct.auth_shared_secret, strlen( Password ) - 2 );
++	else
++	    rc = strcmp( Password, PC_Struct.auth_shared_secret );
++	if ( rc != 0 )
+ 	{
+-	    syslog(LOG_INFO, "STARTTLS failed: No response from IMAP server after sending STARTTLS command" );
++	    syslog( LOG_INFO,
++		    "LOGIN: '%s' (%s:%s) failed: shared secret was wrong",
++		    Username, ClientAddr, portstr );
+ 	    goto fail;
+ 	}
+ 
+-	if ( Server.LiteralBytesRemaining )
+-	{
+-	    syslog(LOG_ERR, "%s: Unexpected string literal in server response.", fn );
+-	    goto fail;
+-	
+-	}
+-	
+-    
+ 	/*
+-	 * Try to match up the tag in the server response to the client tag.
++	 * Build SASL AUTH PLAIN string:
++	 * username\0authentication_username\0authentication_password
+ 	 */
+-	endptr = Server.ReadBuf + rc;
+-    
+-	tokenptr = memtok( Server.ReadBuf, endptr, &last );
+-    
+-	if ( !tokenptr )
+-	{
+-	    /* 
+-	     * no tokens found in server response?  Not likely, but we still
+-	     * have to check.
+-	     */
+-	    syslog(LOG_INFO, "STARTTLS failed: server response to STARTTLS command contained no tokens." );
+-	    goto fail;
+-	}
+-    
+-	if ( memcmp( (const void *)tokenptr, (const void *)"S0001", 
+-		     strlen( tokenptr ) ) )
+-	{
+-	    /* 
+-	     * non-matching tag read back from the server... Lord knows what this
+-	     * is, so we'll fail.
+-	     */
+-	    syslog(LOG_INFO, "STARTTLS failed: server response to STARTTLS command contained non-matching tag." );
+-	    goto fail;
+-	}
+-    
++	char *ptr_username;
++	unsigned int username_size;
++
+ 	/*
+-	 * Now that we've matched the tags up, see if the response was 'OK'
++	 * But first, if username is enclosed in quotes, skip the
++	 * first one and overwrite the second with \0 (with pointer
++	 * math for our use below, since we are still working on
++	 * the original Username)
+ 	 */
+-	tokenptr = memtok( NULL, endptr, &last );
+-    
+-	if ( !tokenptr )
+-	{
+-	    /* again, not likely but we still have to check... */
+-	    syslog(LOG_INFO, "STARTTLS failed: Malformed server response to STARTTLS command" );
+-	    goto fail;
+-	}
+-    
+-	if ( memcmp( (const void *)tokenptr, "OK", 2 ) )
+-	{
+-	    /*
+-	     * If the server sent back a "NO" or "BAD", we can look at the actual
+-	     * server logs to figure out why.  We don't have to break our ass here
+-	     * putting the string back together just for the sake of logging.
+-	     */
+-	    syslog(LOG_INFO, "STARTTLS failed: non-OK server response to STARTTLS command" );
+-	    goto fail;
+-	}
+-    
+-	Server.conn->tls = SSL_new( tls_ctx );
+-	if ( Server.conn->tls == NULL )
+-	{
+-	    syslog(LOG_INFO, "STARTTLS failed: SSL_new() failed" );
+-	    goto fail;
+-	}
+-	    
+-	SSL_clear( Server.conn->tls );
+-	rc = SSL_set_fd( Server.conn->tls, Server.conn->sd );
+-	if ( rc == 0 )
++	ptr_username = Username;
++	username_size = strlen( Username );
++	if ( *ptr_username == '"' && *(ptr_username + username_size - 1) == '"' )
+ 	{
+-	    syslog(LOG_INFO, "STARTTLS failed: SSL_set_fd() failed: %d",
+-		   SSL_get_error( Server.conn->tls, rc ) );
+-	    goto fail;
++	    ++ptr_username;
++	    username_size = username_size - 2;
+ 	}
+ 
+-	SSL_set_connect_state( Server.conn->tls );
+-	rc = SSL_connect( Server.conn->tls );
+-	if ( rc <= 0 )
++	/*
++	 * Add username and \0 to AUTH PLAIN buffer
++	 */
++	if ( username_size > BufLen - 1 )
++	    username_size = BufLen - 1;
++	memcpy( AuthBuf, ptr_username, username_size );
++	AuthBuf[username_size] = '\0';
++	AuthBufIndex = username_size;
++
++	/*
++	 * Add authentication username and \0 to AUTH PLAIN buffer
++	 */
++	AuthBufIndex += snprintf( AuthBuf + AuthBufIndex + 1,
++				BufLen - AuthBufIndex - 1,
++				"%s",
++				PC_Struct.auth_sasl_plain_username );
++
++	/*
++	 * Add authentication password to AUTH PLAIN buffer
++	 */
++	AuthBufIndex += snprintf( AuthBuf + AuthBufIndex + 2,
++				BufLen - AuthBufIndex - 2,
++				"%s",
++				PC_Struct.auth_sasl_plain_password );
++
++	EVP_EncodeBlock( EncodedAuthBuf, AuthBuf, AuthBufIndex + 2 );
++
++	snprintf( SendBuf, BufLen, "A0001 AUTHENTICATE PLAIN %s\r\n", EncodedAuthBuf );
++
++	/* syslog( LOG_INFO, "sending auth plain '%s'", EncodedAuthBuf ); */
++
++	if ( IMAP_Write( Server.conn, SendBuf, strlen(SendBuf) ) == -1 )
+ 	{
+-	    syslog(LOG_INFO, "STARTTLS failed: SSL_connect() failed, %d: %s",
+-		   SSL_get_error( Server.conn->tls, rc ), SSLerrmessage() );
++	    syslog( LOG_INFO,
++		    "LOGIN: '%s' (%s:%s) failed: IMAP_Write() failed attempting to send AUTHENTICATE command to IMAP server: %s",
++		    Username, ClientAddr, portstr, strerror( errno ) );
+ 	    goto fail;
+ 	}
+-
+-	/* XXX Should we grab the session id for later reuse? */
+     }
+-#endif /* HAVE_LIBSSL */
+ 
+ 
+     /*
+-     * Send the login command off to the IMAP server.  Have to treat a literal
+-     * password different.
++     * Otherwise, send a normal login command off to the IMAP server.
++     *
++     * ... but login command has to treat literal passwords differently:
+      */
+-    if ( LiteralPasswd )
++    else if ( LiteralPasswd )
+     {
+ 	snprintf( SendBuf, BufLen, "A0001 LOGIN %s {%d}\r\n", 
+ 		  Username, strlen( Password ) );
+@@ -732,11 +887,13 @@ extern ICD_Struct *Get_Server_conn( char *Username,
+ 	    goto fail;
+ 	}
+     }
++
++
++    /*
++     * Just send the login command via normal means.
++     */
+     else
+     {
+-	/*
+-	 * just send the login command via normal means.
+-	 */
+ 	snprintf( SendBuf, BufLen, "A0001 LOGIN %s %s\r\n", 
+ 		  Username, Password );
+ 	
+diff --git a/src/main.c b/src/main.c
+index e2365fd..f0f013a 100644
+--- a/src/main.c
++++ b/src/main.c
+@@ -440,71 +440,92 @@ int main( int argc, char *argv[] )
+     
+     memset( ICC_HashTable, 0, sizeof ICC_HashTable );
+ 
+-    ServerInit();
+-    
+-    /* Daemonize() would go here */
+ 
+-    SetBannerAndCapability();
+-    
+-    if ( PC_Struct.login_disabled || PC_Struct.force_tls )
+-    {
+-	syslog( LOG_INFO, "%s: Enabling STARTTLS.", fn );
+ #if HAVE_LIBSSL
+-	if ( PC_Struct.support_starttls )
+-	{
+-	    /* Initialize SSL_CTX */
+-	    SSL_library_init();
+-
+-	    /* Set up OpenSSL thread protection */
+-	    ssl_thread_setup(fn);
+-	    
+-            /* Need to seed PRNG, too! */
+-            if ( RAND_egd( ( RAND_file_name( f_randfile, sizeof( f_randfile ) ) == f_randfile ) ? f_randfile : "/.rnd" ) ) 
+-	    {
+-                /* Not an EGD, so read and write it. */
+-                if ( RAND_load_file( f_randfile, -1 ) )
+-                    RAND_write_file( f_randfile );
+-            }
+-	
+-	    SSL_load_error_strings();
+-	    tls_ctx = SSL_CTX_new( TLSv1_client_method() );
+-	    if ( tls_ctx == NULL )
+-	    {
+-		syslog(LOG_ERR, "%s: Failed to create new SSL_CTX.  Exiting.", fn);
+-		exit( 1 );
+-	    }
+-
+-	    /* Work around all known bugs */
+-	    SSL_CTX_set_options( tls_ctx, SSL_OP_ALL );
++    /*
++     * If we're going to support using STARTTLS to connect
++     * to the server, at a minimum we need a CA file (or path)
++     */
++    if ( PC_Struct.tls_ca_file || PC_Struct.tls_ca_path )
++    {
++	/* Initialize SSL_CTX */
++	syslog( LOG_INFO, "%s: Enabling openssl library.", fn );
++	SSL_library_init();
+ 
+-	    if ( ! SSL_CTX_load_verify_locations( tls_ctx,
+-						  PC_Struct.tls_ca_file,
+-						  PC_Struct.tls_ca_path ) ||
+-		 ! SSL_CTX_set_default_verify_paths( tls_ctx ) )
+-	    {
+-		syslog(LOG_ERR, "%s: Failed to load CA data.  Exiting.", fn);
+-		exit( 1 );
+-	    }
++	/* Set up OpenSSL thread protection */
++	ssl_thread_setup(fn);
+ 
+-	    if ( ! set_cert_stuff( tls_ctx,
+-				   PC_Struct.tls_cert_file,
+-				   PC_Struct.tls_key_file ) )
+-	    {
+-		syslog(LOG_ERR, "%s: Failed to load cert/key data.  Exiting.", fn);
+-		exit( 1 );
+-	    }
++	/* Need to seed PRNG, too! */
++	if ( RAND_egd( ( RAND_file_name( f_randfile, sizeof( f_randfile ) ) == f_randfile ) ? f_randfile : "/.rnd" ) )
++	{
++	    /* Not an EGD, so read and write it. */
++	    if ( RAND_load_file( f_randfile, -1 ) )
++	    RAND_write_file( f_randfile );
++	}
+ 
+-	    SSL_CTX_set_verify(tls_ctx, SSL_VERIFY_NONE, verify_callback);
++	SSL_load_error_strings();
++	tls_ctx = SSL_CTX_new( TLSv1_client_method() );
++	if ( tls_ctx == NULL )
++	{ 
++	    syslog(LOG_ERR, "%s: Failed to create new SSL_CTX.  Exiting.", fn);
++	    exit( 1 );
+ 	}
+-	else
+-#endif /* HAVE_LIBSSL */
+-	{
+-	    /* We're screwed!  We won't be able to login without SASL */
+-	    syslog(LOG_ERR, "%s: IMAP server has LOGINDISABLED and we can't do STARTTLS.  Exiting.", fn);
++ 
++	/* Work around all known bugs */
++	SSL_CTX_set_options( tls_ctx, SSL_OP_ALL );
++ 
++	if ( ! SSL_CTX_load_verify_locations( tls_ctx,
++						PC_Struct.tls_ca_file,
++						PC_Struct.tls_ca_path ) ||
++	    ! SSL_CTX_set_default_verify_paths( tls_ctx ) )
++	{ 
++	    syslog(LOG_ERR, "%s: Failed to load CA data.  Exiting.", fn);
++	    exit( 1 );
++	}
++ 
++	if ( ! set_cert_stuff( tls_ctx,
++				PC_Struct.tls_cert_file,
++				PC_Struct.tls_key_file ) )
++	{ 
++	    syslog(LOG_ERR, "%s: Failed to load cert/key data.  Exiting.", fn);
+ 	    exit( 1 );
+ 	}
++
++	SSL_CTX_set_verify(tls_ctx, SSL_VERIFY_NONE, verify_callback);
+     }
++#endif /* HAVE_LIBSSL */
++
++
++    ServerInit();
++    
++    /* Daemonize() would go here */
++
++    SetBannerAndCapability();
+     
++
++    /*
++     * We don't need to check PC_Struct.support_starttls since we
++     * probably have refetched the capability list after a STARTTLS
++     * if we did one; it won't ever be supported at this point.
++     *
++     * It also makes no difference to check PC_Struct.force_tls now
++     * because we've either done a STARTTLS or we haven't - all that
++     * matters is if we got LOGINDISABLED or not.
++     *
++     * Note that all these things *ARE* tested when checking the
++     * server capabilities (in fact, the following check is probably
++     * a duplicate).
++     */
++    if ( PC_Struct.login_disabled )
++    {
++	/* We're screwed!  We can't login */
++	syslog(LOG_ERR,
++		"%s: IMAP server has LOGINDISABLED.  Exiting.",
++		fn);
++	exit( 1 );
++    }
++
++
+     memset( &aihints, 0, sizeof aihints );
+     aihints.ai_family = AF_UNSPEC;
+     aihints.ai_socktype = SOCK_STREAM;
+@@ -1013,6 +1034,7 @@ static int ParseBannerAndCapability( char *DestBuf,
+ 	exit( 1 );
+     }
+     
++    syslog( LOG_INFO, "%s: Attempting to parse capability string: %s", fn, SourceBuf);
+     
+     /*
+      * strip out all of the AUTH mechanisms except the ones that we support.
+@@ -1139,6 +1161,7 @@ static int ParseBannerAndCapability( char *DestBuf,
+ 	    if ( ! strncasecmp( CP, "STARTTLS", strlen( "STARTTLS" ) ) )
+ 	    {
+ 	        PC_Struct.support_starttls = STARTTLS_SUPPORTED;
++	        //syslog( LOG_INFO, "%s: Found out the server supports STARTTLS, even though we don't", fn);
+ 	        continue;
+ 	    }
+ 	
+@@ -1325,6 +1348,103 @@ static void SetBannerAndCapability( void )
+ 	exit( 1 );
+     }
+     
++    /*
++     * If we're using it, attempt STARTTLS before doing one more
++     * CAPABILITY so our capability string is accurate
++     */
++    if ( PC_Struct.login_disabled || PC_Struct.force_tls )
++    {
++#if HAVE_LIBSSL
++	if ( PC_Struct.support_starttls != STARTTLS_NOT_SUPPORTED )
++	{
++	    if ( Attempt_STARTTLS( &itd ) != 0 )
++	    {
++		syslog(LOG_ERR, "%s: STARTTLS failed for CAPABILITY check -- exiting.", fn );
++		close( itd.conn->sd );
++		exit( 1 );
++	    }
++	    else
++	    {
++		/*
++		 * STARTTLS was successful, so we can proceed
++		 * to get the new CAPABILITY list - first,
++		 * send a CAPABILITY command to the server.
++		 */
++		if ( IMAP_Write( itd.conn, "1 CAPABILITY\r\n", strlen("1 CAPABILITY\r\n") ) == -1 )
++		{
++		    syslog(LOG_ERR, "%s: Unable to send capability command to server: %s -- exiting.", fn, strerror(errno) );
++		    close( itd.conn->sd );
++		    exit( 1 );
++		}
++
++		/*
++		 * From RFC2060:
++		 * The server MUST send a single untagged
++		 * CAPABILITY response with "IMAP4rev1" as one of the listed
++		 * capabilities before the (tagged) OK response.
++		 *
++		 * The means we should read exactly 2 lines of data back from the server.
++		 * The first will be the untagged capability line.
++		 * The second will be the OK response with the tag in it.
++		 */
++
++		BytesRead = IMAP_Line_Read( &itd );
++		if ( BytesRead == -1 )
++		{
++		    syslog( LOG_ERR, "%s: Failed to read capability response from server: %s --  exiting.", fn, strerror( errno ) );
++		    close( itd.conn->sd );
++		    exit( 1 );
++		}
++
++		if ( itd.LiteralBytesRemaining )
++		{
++		    syslog( LOG_ERR, "%s: Server sent unexpected literal specifier in CAPABILITY response -- Exiting.", fn );
++		    close( itd.conn->sd );
++		    exit ( 1 );
++		}
++
++		CapabilityLen = ParseBannerAndCapability( Capability, sizeof Capability - 1,
++		itd.ReadBuf, BytesRead, 1 );
++
++		/* Now read the tagged response and make sure it's OK */
++		BytesRead = IMAP_Line_Read( &itd );
++		if ( BytesRead == -1 )
++		{
++		    syslog( LOG_ERR, "%s: Failed to read capability response from server: %s -- exiting.", fn, strerror( errno ) );
++		    close( itd.conn->sd );
++		    exit( 1 );
++		}
++
++		if ( itd.LiteralBytesRemaining )
++		{
++		    syslog( LOG_ERR, "%s: Server sent unexpected literal specifier in tagged CAPABILITY response -- exiting.", fn );
++		    exit( 1 );
++		}
++
++		if ( strncasecmp( itd.ReadBuf, IMAP_TAGGED_OK, strlen(IMAP_TAGGED_OK) ) )
++		{
++		    syslog(LOG_ERR, "%s: Received non-OK tagged reponse from imap server on CAPABILITY command -- exiting.", fn );
++		    close( itd.conn->sd );
++		    exit( 1 );
++		}
++	    }
++	}
++	else
++#endif /* HAVE_LIBSSL */
++	{
++	    /* We're screwed!  We won't be able to login without SASL */
++	    syslog(LOG_ERR,
++		"%s: IMAP server has LOGINDISABLED and we can't do STARTTLS.  Exiting.",
++		fn);
++	    close( itd.conn->sd );
++	    exit( 1 );
++	}
++    }
++    else
++    {
++	//syslog( LOG_ERR, "%s: Not trying STARTTLS and second CAPABILITY.", fn );
++    }
++
+     /* Be nice and logout */
+     if ( IMAP_Write( itd.conn, "2 LOGOUT\r\n", strlen("2 LOGOUT\r\n") ) == -1 )
+     {
+@@ -1449,4 +1569,3 @@ static int set_cert_stuff(SSL_CTX * ctx,
+ 
+ 
+ 
+-
+diff --git a/src/request.c b/src/request.c
+index 756f8ab..c3d2a6a 100644
+--- a/src/request.c
++++ b/src/request.c
+@@ -1766,6 +1766,21 @@ extern void HandleRequest( int clientsd )
+ 		close( Client.conn->sd );
+ 		return;
+ 	    }
++	    else if ( !strcasecmp( (const char *)AuthMech, "PLAIN" ) )
++	    {
++		/*
++		 * we handle this mechanism, but internally; not as
++		 * requested by a client
++		 */
++		snprintf( SendBuf, BufLen, "%s NO no mechanism available, we do something different!\r\n", Tag );
++		if ( IMAP_Write( Client.conn, SendBuf, strlen(SendBuf) ) == -1 )
++		{
++		    IMAPCount->CurrentClientConnections--;
++		    close( Client.conn->sd );
++		    return;
++		}
++		continue;
++	    }
+ 	    else
+ 	    {
+ 		/*
+-- 
+2.7.4
+

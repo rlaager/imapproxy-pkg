@@ -1,0 +1,208 @@
+From 24281b274ab5adb1562d6f342d41a7dba8ec774d Mon Sep 17 00:00:00 2001
+From: Paul Lesniewski <paul@squirrelmail.org>
+Date: Sun, 8 May 2011 07:59:43 +0000
+Subject: [PATCH 23/50] Add configurable, arbitrary pre-authentication command
+ that the administrator can use to send non-standard commands to the server
+ before each user authenticates (for an example usage, see:
+ http://en.wikipedia.org/wiki/Yahoo!_Mail#Free_IMAP_and_SMTPs_access )
+
+git-svn-id: https://svn.code.sf.net/p/squirrelmail/code/trunk/imap_proxy@14113 7612ce4b-ef26-0410-bec9-ea0150e637f0
+---
+ ChangeLog              |  17 +++++---
+ include/imapproxy.h    |   1 +
+ scripts/imapproxy.conf |  17 ++++++++
+ src/imapcommon.c       | 110 +++++++++++++++++++++++++++++++++++++++++++++++++
+ 4 files changed, 140 insertions(+), 5 deletions(-)
+
+diff --git a/ChangeLog b/ChangeLog
+index 9be3588..4e597e4 100644
+--- a/ChangeLog
++++ b/ChangeLog
+@@ -1,11 +1,18 @@
+ 2011-04-17  Paul Lesniewski <paul@squirrelmail.org>
+-        * Add restart operation to (linux) init script
+-        * Add BSD-style init script (thanks to Emmanuel Dreyfus)
++	* Added configurable, arbitrary pre-authentication command
++	  that the administrator can use to send non-standard
++	  commands to the server before each user authenticates
++	  (for an example usage, see:
++	  http://en.wikipedia.org/wiki/Yahoo!_Mail#Free_IMAP_and_SMTPs_access )
+ 
+ 2011-04-17  Paul Lesniewski <paul@squirrelmail.org>
+-        * Fixed server connection synchronization issues in the SELECT
+-          cache code (ensure server failures result in server connections
+-          being fully shut down and removed from connection cache).
++	* Add restart operation to (linux) init script
++	* Add BSD-style init script (thanks to Emmanuel Dreyfus)
++
++2011-04-17  Paul Lesniewski <paul@squirrelmail.org>
++	* Fixed server connection synchronization issues in the SELECT
++	  cache code (ensure server failures result in server connections
++	  being fully shut down and removed from connection cache).
+ 
+ 2011-04-17  Paul Lesniewski <paul@squirrelmail.org>
+ 	* When NO or BAD response is returned from the server against
+diff --git a/include/imapproxy.h b/include/imapproxy.h
+index a086255..2433821 100644
+--- a/include/imapproxy.h
++++ b/include/imapproxy.h
+@@ -300,6 +300,7 @@ struct ProxyConfig
+     unsigned char support_starttls;           /* starttls support flag */
+     unsigned char login_disabled;             /* login disabled flag */
+     char *chroot_directory;                   /* chroot(2) into this dir */
++    char *preauth_command;                    /* arbitrary pre-authentication command */
+     char *auth_sasl_plain_username;           /* authentication username under SASL PLAIN */
+     char *auth_sasl_plain_password;           /* authentication password under SASL PLAIN */
+     char *auth_shared_secret;                 /* REQUIRED shared secret in leiu of a user password when using LOGIN command with SASL PLAIN authentication */
+diff --git a/scripts/imapproxy.conf b/scripts/imapproxy.conf
+index ffb99d9..1ae6746 100644
+--- a/scripts/imapproxy.conf
++++ b/scripts/imapproxy.conf
+@@ -185,6 +185,23 @@ force_tls no
+ 
+ 
+ #
++## preauth_command
++##
++## Arbitrary command that can be sent to the server before
++## authenticating users.  This can be useful to access non-
++## standard IMAP servers such as Yahoo!, which requires the
++## following command to be sent before authentication is allowed:
++##    ID ("GUID" "1")
++## (See: http://en.wikipedia.org/wiki/Yahoo!_Mail#Free_IMAP_and_SMTPs_access )
++## To use such a command, this setting should look like this:
++##    preauth_command ID ("GUID" "1")
++## No matter what this command is, it is expected to return an
++## OK response
++#
++#preauth_command
++
++
++#
+ ## enable_admin_commands
+ ##
+ ## Used to enable or disable the internal squirrelmail-imap_proxy
+diff --git a/src/imapcommon.c b/src/imapcommon.c
+index 91f949e..30a6d02 100644
+--- a/src/imapcommon.c
++++ b/src/imapcommon.c
+@@ -746,6 +746,116 @@ extern ICD_Struct *Get_Server_conn( char *Username,
+ 
+ 
+     /*
++     * Send and validate pre-authentication command if given
++     */
++    if ( PC_Struct.preauth_command )
++    {
++	snprintf( SendBuf, BufLen, "P0001 %s\r\n", PC_Struct.preauth_command );
++	
++	if ( IMAP_Write( Server.conn, SendBuf, strlen(SendBuf) ) == -1 )
++	{
++	    syslog( LOG_INFO,
++		    "PREAUTH failed: IMAP_Write() failed attempting to send pre-authentication command to IMAP server: %s",
++		    strerror( errno ) );
++	    goto fail;
++	}
++    
++	// Read the server response
++	//
++	for ( ;; )
++	{
++	    if ( ( rc = IMAP_Line_Read( &Server ) ) == -1 )
++	    {
++		syslog( LOG_INFO,
++			"PREAUTH failed: No response from IMAP server after sending pre-authentication command (%s)",
++			PC_Struct.preauth_command );
++		goto fail;
++	    }
++
++	    if ( Server.LiteralBytesRemaining )
++	    {
++		syslog(LOG_ERR, "%s: Unexpected string literal in server pre-authentication response.", fn );
++		goto fail;
++	    }
++	
++	    if ( Server.ReadBuf[0] != '*' )
++		break;
++	}
++    
++    
++	// Try to match up the tag in the server response to the client tag.
++	//
++	endptr = Server.ReadBuf + rc;
++    
++	tokenptr = memtok( Server.ReadBuf, endptr, &last );
++    
++	if ( !tokenptr )
++	{
++
++	    // no tokens found in server response?  Not likely, but we still
++	    // have to check.
++	    //
++	    syslog( LOG_INFO, "PREAUTH failed: server response to pre-authentication command contained no tokens." );
++	    goto fail;
++	}
++    
++	if ( memcmp( (const void *)tokenptr, (const void *)"P0001", strlen( tokenptr ) ) )
++	{
++
++	    // non-matching tag read back from the server... Lord knows what this
++	    // is, so we'll fail.
++	    //
++	    syslog( LOG_INFO, "PREAUTH failed: server response to pre-authentication command contained non-matching tag." );
++	    goto fail;
++	}
++    
++    
++	// Now that we've matched the tags up, see if the response was 'OK'
++	//
++	tokenptr = memtok( NULL, endptr, &last );
++    
++	if ( !tokenptr )
++	{
++	    // again, not likely but we still have to check... 
++	    //
++	    syslog( LOG_INFO, "PREAUTH failed: Malformed server response to pre-authentication command" );
++	    goto fail;
++	}
++    
++	if ( memcmp( (const void *)tokenptr, "OK", 2 ) )
++	{
++	    // In order to log the full server response (minus the tag),
++	    // we want to re-construct the ReadBuf starting at the location
++	    // currently pointed to by tokenptr.  Thus, we put back the
++	    // last space that memtok() had replaced with a null characater
++	    // (at location pointed to by last).
++	    //
++	    *last = ' ';
++
++	    // Then we re-adjust endptr to point to the CR at the end of
++	    // the line and set to NULL (a few lines below) so we can use
++	    // the rest of the response information as a normal string
++	    // 
++	    endptr = memchr( last + 1, '\r', endptr - (last + 1) );
++
++	    // No CR is unexpected; does this indicate malformed response?
++	    // Probably.  Anyway, we'll just give up on finding any other
++	    // info from the server.
++	    //
++	    if ( !endptr )
++	    endptr = last;
++
++	    *endptr = '\0';
++
++	    syslog( LOG_INFO,
++		"PREAUTH failed: non-OK server response to pre-authentication command (%s): %s",
++		PC_Struct.preauth_command, tokenptr );
++	    goto fail;
++	}
++    }
++    
++
++    /*
+      * If configured to do so, execute SASL PLAIN authentication
+      * using the static authentication username and password from
+      * configuration (auth_sasl_plain_username/auth_sasl_plain_password).
+-- 
+2.7.4
+
