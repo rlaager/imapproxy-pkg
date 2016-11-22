@@ -27,8 +27,8 @@ msgstr "Ku ktorému IMAP serveru sa pripojiť:"
 #. Description
 #: ../templates:1001
 msgid ""
-"Please enter the hostname or address of the IMAP server ImapProxy will "
+"Please enter the hostname or address of the IMAP server IMAP Proxy will "
 "connect to."
 msgstr ""
 "Prosím, zadajte názov hostiteľa alebo adresu IMAP servera, ku ktorému sa "
-"ImapProxy pripojí."
+"IMAP Proxy pripojí."

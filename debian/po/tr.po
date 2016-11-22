@@ -27,8 +27,8 @@ msgstr "Bağlanılacak IMAP sunucusu:"
 #. Description
 #: ../templates:1001
 msgid ""
-"Please enter the hostname or address of the IMAP server ImapProxy will "
+"Please enter the hostname or address of the IMAP server IMAP Proxy will "
 "connect to."
 msgstr ""
-"Lütfen ImapProxy'nin bağlanacağı IMAP sunucusunun makine adını ya da "
+"Lütfen IMAP Proxy'nin bağlanacağı IMAP sunucusunun makine adını ya da "
 "adresini girin."

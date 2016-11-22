@@ -29,8 +29,8 @@ msgstr "Serwer IMAP z którym ma nastąpić połączenie:"
 #. Description
 #: ../templates:1001
 msgid ""
-"Please enter the hostname or address of the IMAP server ImapProxy will "
+"Please enter the hostname or address of the IMAP server IMAP Proxy will "
 "connect to."
 msgstr ""
 "Proszę wprowadzić nazwę lub adres serwera IMAP, do którego ma być podłączone "
-"ImapProxy."
+"IMAP Proxy."

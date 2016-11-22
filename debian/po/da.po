@@ -26,8 +26,8 @@ msgstr "IMAP-server at forbinde til:"
 #. Description
 #: ../templates:1001
 msgid ""
-"Please enter the hostname or address of the IMAP server ImapProxy will "
+"Please enter the hostname or address of the IMAP server IMAP Proxy will "
 "connect to."
 msgstr ""
-"Indtast venligst værtsnavnet eller adressen på IMAP-serveren som ImapProxy "
+"Indtast venligst værtsnavnet eller adressen på IMAP-serveren som IMAP Proxy "
 "vil forbinde til."

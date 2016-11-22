@@ -27,8 +27,8 @@ msgstr "Máy phục vụ IMAP tới đó cần kết nối:"
 #. Description
 #: ../templates:1001
 msgid ""
-"Please enter the hostname or address of the IMAP server ImapProxy will "
+"Please enter the hostname or address of the IMAP server IMAP Proxy will "
 "connect to."
 msgstr ""
-"Hãy nhập tên máy hoặc địa chỉ của máy phục vụ IMAP tới đó trình ImapProxy sẽ "
+"Hãy nhập tên máy hoặc địa chỉ của máy phục vụ IMAP tới đó trình IMAP Proxy sẽ "
 "kết nối."

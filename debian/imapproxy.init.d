@@ -18,7 +18,7 @@
 #	Modified for Debian GNU/Linux by Ian Murdock <imurdock@gnu.ai.mit.edu>.
 #
 # Version:	@(#)skeleton  1.8  03-Mar-1998  miquels@cistron.nl
-# Customized for UP-ImapProxy by Jose Luis Tallon <jltallon@adv-solutions.net>
+# Customized for IMAP Proxy by Jose Luis Tallon <jltallon@adv-solutions.net>
 
 PATH=/sbin:/bin:/usr/sbin:/usr/bin
 DAEMON=/usr/sbin/imapproxyd
