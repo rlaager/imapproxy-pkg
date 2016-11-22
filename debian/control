@@ -16,11 +16,11 @@ Depends: lsb-base (>= 3.2-13), ${shlibs:Depends}, ${misc:Depends}, ucf (>= 0.28)
 Description: IMAP protocol proxy
  IMAP Proxy proxies IMAP transactions between an IMAP client and an IMAP
  server. The general idea is that the client should never know that it is
- not talking to the real IMAP server, but IMAP Proxy caches server connections.
+ not talking to the real IMAP server while IMAP Proxy caches server connections.
  .
  IMAP Proxy was written to compensate for webmail clients that are unable to
  maintain persistent connections to an IMAP server. Most webmail clients
- need to log in to an IMAP server for nearly every single transaction; This
+ need to log in to an IMAP server for nearly every single transaction. This
  behaviour can cause tragic performance problems on the IMAP server.
  IMAP Proxy tries to deal with this problem by leaving server connections
  open for a short time after a webmail client logs out. When the webmail client
