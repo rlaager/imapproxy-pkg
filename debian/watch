@@ -1,2 +1,2 @@
-version=2
-http://www.imapproxy.org downloads/up-imapproxy-?_?([\w+\d+\.]+|\d+)(\.tar|\.tgz)(\.gz|\.bz2|) debian uupdate
+version=3
+http://sf.net/squirrelmail/squirrelmail-imap_proxy-(\d\S+)\.(?:zip|tgz|tbz|txz|(?:tar\.(?:gz|bz2|xz)))
