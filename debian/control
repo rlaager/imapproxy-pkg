@@ -18,7 +18,7 @@ Description: IMAP protocol proxy
  server. The general idea is that the client should never know that it is
  not talking to the real IMAP server, but ImapProxy caches server connections.
  .
- ImapProxy was written to compensate for webmail clients that are unable  to
+ ImapProxy was written to compensate for webmail clients that are unable to
  maintain persistent connections to an IMAP server. Most webmail clients
  need to log in to an IMAP server for nearly every single transaction; This
  behaviour can cause tragic performance problems on the IMAP server.
