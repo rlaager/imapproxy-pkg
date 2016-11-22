@@ -49,3 +49,9 @@
 0049-Unify-log-messages.patch
 0050-Add-support-for-DNS-RR-and-ability-to-restrict-DNS-l.patch
 fix-egd-ifdef.patch
+check-dup-return-value.patch
+fix-missing-definitions.patch
+fix-size_t-formatters.patch
+fix-ssl-types.patch
+fix-socklen_t-types.patch
+remove-unused-variables.patch

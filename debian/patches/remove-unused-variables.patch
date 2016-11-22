@@ -1,0 +1,15 @@
+--- a/src/main.c
++++ b/src/main.c
+@@ -186,10 +186,11 @@
+ **
+ */
+ 
+-
++#if 0
+ static char *sourceRevision = "$Revision$";
+ static char *sourceVersion = "$Id$";
+ static char *sourceAuthor = "$Author$";
++#endif
+ 
+ #define _REENTRANT
+ 
