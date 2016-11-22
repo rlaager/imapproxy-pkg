@@ -7,6 +7,8 @@ Build-Depends: autotools-dev, debhelper (>= 5), po-debconf (>= 0.8.2),
 	libwrap0-dev, libncurses-dev, libssl-dev, dh-systemd
 Homepage: http://www.imapproxy.org
 Standards-Version: 3.8.4
+Vcs-Browser: https://github.com/rlaager/imapproxy-pkg
+Vcs-Git: git://github.com/rlaager/imapproxy-pkg.git
 
 Package: imapproxy
 Architecture: any
