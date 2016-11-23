@@ -3,7 +3,7 @@ Section: mail
 Priority: optional
 Maintainer: Jose Luis Tallon <jltallon@adv-solutions.net>
 Uploaders: Richard Laager <rlaager@wiktel.com>
-Build-Depends: autotools-dev, debhelper (>= 5), po-debconf (>= 0.8.2), 
+Build-Depends: autotools-dev, debhelper (>= 9), po-debconf (>= 0.8.2),
 	libwrap0-dev, libncurses-dev, libssl-dev, dh-systemd
 Homepage: http://www.imapproxy.org
 Standards-Version: 3.8.4
