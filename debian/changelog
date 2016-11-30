@@ -1,3 +1,29 @@
+up-imapproxy (1.2.7-2) unstable; urgency=medium
+
+  [ Peter Eisentraut ]
+  * status support (Closes: 526673)
+
+  [ Richard Laager ]
+  * New co-maintainer (Closes: 838071)
+  * Import packaging into git
+  * Update watch file for SquirrelMail adoption
+  * Update to debhelper 9
+  * Add build-arch and build-indep targets
+  * Update Standards-Version to 3.9.8 (no changes)
+  * Standardize the name as IMAP Proxy / imapproxy
+  * Tweak the package description
+  * Backport all changes to-date from SVN (Closes: 728557, 834591, 836122)
+    (LP: 1614062)
+  * Make the pimpstat.8 man page useful (Closes: 518928)
+  * Start after IMAP daemons (if installed) (Closes: 738882)
+  * Fix many compiler warnings
+  * Fix building on OpenSSL 1.1 (Closes: 828586)
+  * Remove some useless FAQ items
+  * Cleanup the README situation
+  * Cleanup comments in imapproxy.conf
+
+ -- Richard Laager <rlaager@wiktel.com>  Wed, 30 Nov 2016 03:12:49 -0600
+
 up-imapproxy (1.2.7-1.2) unstable; urgency=medium
 
   * Non-maintainer upload.
