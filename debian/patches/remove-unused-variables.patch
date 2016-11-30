@@ -1,3 +1,7 @@
+Description: Remove unused variables
+Author: Richard Laager <rlaager@wiktel.com>
+Forwarded: no
+Last-Update: 2016-11-23
 --- a/src/main.c
 +++ b/src/main.c
 @@ -186,10 +186,11 @@
