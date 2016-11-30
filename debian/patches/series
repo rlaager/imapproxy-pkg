@@ -56,3 +56,4 @@ fix-ssl-types.patch
 fix-socklen_t-types.patch
 remove-unused-variables.patch
 openssl-1.1.patch
+cleanup-names.patch
