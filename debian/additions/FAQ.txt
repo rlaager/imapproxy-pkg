@@ -41,20 +41,3 @@ and expires every connection that's been logged out at least
 cache_expiration_time seconds. If your cache expiration time is set 
 to 5 minutes, a cached connection could potentially not be expired for 
 nearly 6 minutes.
-
-
-*  What platforms will imapproxy run on?
-
-So far it's been tested on Solaris 8, Solaris 9, RedHat 7.3, RedHat 9, 
-IRIX 6.5 and FreeBSD 5.0. With some manual tweaking, it's known to run 
-on older versions of FreeBSD and Mac OS X. If you're running it on a 
-platform not listed here, let us know and we'll update this list.
-
-
-*  Is this the Horde Imap Proxy?
-
-No. You can find information about the Horde Imap Proxy at 
-http://www.horde.org/imapproxy. This one is the Imap Proxy commonly known 
-as up-imapproxy. They're two totally different Imap Proxy servers. 
-I just shortened the name from up-imapproxy to imapproxy when I 
-registered the domain. I thought www.upimapproxy.org looked pretty stupid.
