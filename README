@@ -1,26 +1,28 @@
-                 Copyright (c) 2002,2003 Dave McMurtrie
+     Copyright (c) 2010-2016 The SquirrelMail Project Team
+     Copyright (c) 2002-2010 Dave McMurtrie
 
 
-This directory contains the source distribution of up-imapproxy.
+This directory contains the source distribution of SquirrelMail IMAP Proxy.
 
-If you find any bugs in up-imapproxy, please subscribe to the imapproxy-info
-mailing list and post your bug there.
+If you find any bugs in squirrelmail-imap_proxy, please subscribe to the
+squirrelmail-imapproxy mailing list and post your bug there.
 
-If you want to subscribe to the imapproxy-info mailing list, visit:
+If you want to subscribe to the squirrelmail-imapproxy mailing list, visit:
 
-http://lists.andrew.cmu.edu/mailman/listinfo/imapproxy-info
+https://lists.sourceforge.net/lists/listinfo/squirrelmail-imapproxy
 
 For some Debian specific issues that have come up, read the file README.debian.
 
-To read a little bit about SSL support in imapproxy, read README.ssl.
+To read a little bit about SSL support in squirrelmail-imap_proxy, read
+README.ssl.
 
 
 ##############################################################################
 HOW TO BUILD
 ##############################################################################
 
-Before you build imapproxy, you're going to need to obtain the OpenSSL
-libraries.  Build and install them, then you're ready to move on.
+Before you build squirrelmail-imap_proxy, you're going to need to obtain
+the OpenSSL libraries.  Build and install them, then you're ready to move on.
 
 It should be pretty painless:
 
@@ -40,6 +42,10 @@ a bug report.
 
 /etc/imapproxy.conf
 
+"make install-init-systemd" will attempt to install the systemd startup script:
+
+/lib/systemd/system/imap_proxy.service
+
 "make install-init" will attempt to install the startup script and symlinks:
 
 /etc/init.d/imapproxy
@@ -50,8 +56,8 @@ a bug report.
 
 After you successfully build the proxy server, you'll need to edit the
 global configuration file to suit your needs.  By default, the proxy
-server looks at /etc/imapproxy.conf as his default configuration file.  You
-can change this at runtime by supplying the -f argument to
+server looks at /etc/imapproxy.conf as its default configuration file.
+You can change this at runtime by supplying the -f argument to
 /usr/local/sbin/in.imapproxyd.
 
 /usr/local/sbin/pimpstat is the Polling Imap Mail Proxy Statistical tool.  It's
@@ -69,7 +75,7 @@ CONFIGURATION OPTIONS
 
 server_hostname
 ---------------
-This determines which imap server you want to proxy connections to.
+This determines which IMAP server you want to proxy connections to.
 
 cache_size
 ----------
@@ -153,13 +159,44 @@ See README.ssl for more information.
 
 tls_cert_file
 -------------
-File containing the certificate presented by imapproxy to the server for
-client authentication during STARTTLS.  See README.ssl for more information.
+File containing the certificate presented by squirrelmail-imap_proxy to the
+server for client authentication during STARTTLS.  See README.ssl for more
+information.
 
 tls_key_file
 ------------
 File containing the private key belonging to the client certificate.  See
 README.ssl for more information.
+
+tls_verify_server
+-----------------
+Indicates that the server's TLS certificate must be verified.  See
+README.ssl for more information.
+
+tls_ciphers
+-----------
+Allows you to manually specify TLS cipher suite as documented in openssl
+ciphers(1).  See README.ssl for more information.
+
+tls_no_tlsv1
+------------
+Prevents the usage of TLS v1 (SSL v2 and v3 are already forbidden, which
+is hard coded).  See README.ssl for more information.
+
+tls_no_tlsv1.1
+--------------
+Prevents the usage of TLS v1.1 (SSL v2 and v3 are already forbidden, which
+is hard coded).  See README.ssl for more information.
+
+tls_no_tlsv1.2
+--------------
+Prevents the usage of TLS v1.2 (SSL v2 and v3 are already forbidden, which
+is hard coded).  See README.ssl for more information.
+
+force_tls
+---------
+Requires STARTTLS support by the server (won't use unsecured connections).
+See README.ssl for more information.
 
 enable_select_cache
 -------------------
@@ -167,19 +204,19 @@ Allows SELECT data caching to be enabled or disabled.
 
 foreground_mode
 ---------------
-When enabled, this will prevent imapproxy from detaching from his parent
-process and controlling terminal.
+When enabled, this will prevent squirrelmail-imap_proxy from detaching from
+his parent process and controlling terminal.
 
 chroot_directory
 ----------------
-If this value is set to anything, it implicitly causes imapproxy to run in
-a chroot jail.
+If this value is set to anything, it implicitly causes squirrelmail-imap_proxy
+to run in a chroot jail.
 
 enable_admin_commands
 ---------------------
-The internal admin commands that imapproxy provides (p_dumpicc, p_trace,
-etc) are a security vulnerability if you do not restrict access to the
-listen_port using tcp wrappers, iptables, ipchains, ipfilter, an external
+The internal admin commands that squirrelmail-imap_proxy provides (p_dumpicc,
+p_trace, etc) are a security vulnerability if you do not restrict access to
+the listen_port using tcp wrappers, iptables, ipchains, ipfilter, an external
 firewall, or some other mechanism.  Because of this, the internal admin
 commands are disabled by default.
 
@@ -188,10 +225,10 @@ commands are disabled by default.
 NEW STATUS RESPONSE:
 ##############################################################################
 
-Upon a successful LOGIN or AUTHENTICATION, if imapproxy reused an existing
-connection an untagged IMAP response with the status response XPROXYREUSE
-will be issued.  This status response indicates to a client that any previous
-initialization does not need to be performed again.
+Upon a successful LOGIN or AUTHENTICATION, if squirrelmail-imap_proxy reused
+an existing connection an untagged IMAP response with the status response
+XPROXYREUSE will be issued.  This status response indicates to a client that
+any previous initialization does not need to be performed again.
 
 Examples:
 ---------
@@ -205,7 +242,7 @@ S: a001 OK User logged in
 
 C: a001 LOGIN user password
 S: [... untagged response(s) from remote IMAP server ...]
-S: * OK [XPROXYREUSE] IMAP connection reused by imapproxy
+S: * OK [XPROXYREUSE] IMAP connection reused by squirrelmail-imap_proxy
 S: a001 OK User logged in
 
 
@@ -215,7 +252,7 @@ ADDITIONAL COMMANDS:
 
 There are a few additional commands that have been added to allow you to
 administer the proxy server.  They're implemented through the same mechanism
-as regular imap protocol commands, so they require you to telnet to your
+as regular IMAP protocol commands, so they require you to telnet to your
 proxy server on whatever port you choose to bind to and type them like a
 regular protocol transaction.  At our site, we've severely limited access to
 the proxy port such that only our webmail machines and one internal admin
@@ -315,7 +352,7 @@ Usage:
 Untagged response(s) (1 for each cached connection):
   * XPROXY_VERSION <version>
 
-  <version> = Current version number of imapproxy.
+  <version> = Current version number of squirrelmail-imap_proxy.
 
 Example:
 C: a001 XPROXY_VERSION
@@ -323,23 +360,46 @@ S: * XPROXY_VERSION 1.2.6
 S: a001 OK Completed
 
 
+ID
+--
+This is not a command specific to squirrelmail-imap_proxy, rather it
+comes from RFC 2971.  It is listed here because the ID command may
+be sent before the client authenticates, which means the proxy server
+handles it - sort of.  Any ID commands still need to be sent to the
+IMAP server, so the proxy responds with a fake "OK" and queues the ID
+commands to be sent once a LOGIN or AUTHENTICATE is received from the
+client and a server connection is (re)established.
+
+Usage:
+  <tag> ID [(parameter list)]
+
+  [(parameter list)] = (OPTIONAL) Parameters to be sent to IMAP server
+
+  See RFC 2971.
+
+Examples:
+C: a001 ID
+S: a001 OK Completed
+
+C: a001 ID ("x-originating-ip" "10.10.1.2")
+S: a001 OK Completed
+
+Responses above from the proxy server are faked and do not necessarily
+indicate that the IMAP server will accept the ID commands.  If an ID
+command fails when sent to the IMAP server, the proxy server will log
+a problem that includes the string "QUEUED PREAUTH failed".
+
+Any ID commands sent by the client AFTER login/authentication are
+always sent directly through to the IMAP server and are never handled
+by the proxy server.
+
+NOTE: Currently only the last ID command received before client login
+is remembered and relayed to the server.  Please let us know if you
+find this insufficient.
+
+
 
 Happy proxying,
 
-Dave  <davemcmurtrie@gmail.com>
+The SquirrelMail Project Team
 
-
-                              _________
-                             /        |
-                            /         |
-                           /    ______|
-                          /    /       ________
-                         |    |        |      /
-                         |    |        |_____/
-                         |    |        ______
-                         |    |        |     \
-                         |    |        |______\
-                          \    \_______
-                           \           |
-                            \          |
-                             \_________|

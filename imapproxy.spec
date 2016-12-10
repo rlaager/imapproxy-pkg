@@ -1,32 +1,33 @@
-#This is imapproxy rpm spec file
+#This is squirrelmail-imap_proxy rpm spec file
 
-%define ver	1.2.7
+%define ver	1.2.8 [SVN]
 %define rel	1
 %define prefix	/usr/local
 
 %define withkrb5 0
 # Check for option at command line, ie:
-# rpmbuild -bb imapproxy.spec --define 'with_krb5 1'
+# rpmbuild -bb squirrelmail-imap_proxy.spec --define 'with_krb5 1'
 # with_krb5 indicates the Kerberos includes are needed (ie: Red Hat Linux 9)
 %{?with_krb5:%define withkrb5 1}
 
-Summary:	Imapproxy Daemon
-Name:		up-imapproxy
+Summary:	IMAP Proxy Daemon
+Name:		SquirrelMail IMAP Proxy
 Version:	%ver
 Release:	%rel
+#Copyright:	The SquirrelMail Project Team
 #Copyright:	Dave McMurtrie
 License:        GPL
 Group:		Networking/Daemons
-Source0:	http://www.imapproxy.org/downloads/up-imapproxy-%{ver}.tar.gz
+Source0:	http://squirrelmail.org/download.php
 #Source1:	imapproxy.conf
 #Source2:	imapproxy.init
-Url:		http://www.imapproxy.org
+Url:		http://imapproxy.org
 Packager:	Devrim SERAL <devrim@gazi.edu.tr>
 #BuildRoot:	/var/tmp/imapproxy-%{ver}-root
 BuildRoot:	%{_tmppath}/%{name}-%{ver}-root
 
 %description
-This is a connection caching imapproxy daemon for proxied imap connections
+This is a connection caching IMAP proxy daemon for proxied IMAP connections
 
 %prep
 %setup 
@@ -49,7 +50,7 @@ install -d $RPM_BUILD_ROOT/etc
 install -d $RPM_BUILD_ROOT/etc/init.d
 install -d $RPM_BUILD_ROOT/%{prefix}/sbin
 
-make prefix=$RPM_BUILD_ROOT%{prefix} rpm_prefix=$RPM_BUILD_ROOT  rpm-install
+make DESTDIR=$RPM_BUILD_ROOT rpm-install
 
 %clean
 rm -rf $RPM_BUILD_ROOT

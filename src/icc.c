@@ -1,23 +1,11 @@
 /*
-** 
-**               Copyright (c) 2002,2003 Dave McMurtrie
 **
-** This file is part of imapproxy.
+** Copyright (c) 2010-2016 The SquirrelMail Project Team
+** Copyright (c) 2002-2010 Dave McMurtrie
 **
-** imapproxy is free software; you can redistribute it and/or modify
-** it under the terms of the GNU General Public License as published by
-** the Free Software Foundation; either version 2 of the License, or
-** (at your option) any later version.
+** Licensed under the GNU GPL. For full terms see the file COPYING.
 **
-** imapproxy is distributed in the hope that it will be useful,
-** but WITHOUT ANY WARRANTY; without even the implied warranty of
-** MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-** GNU General Public License for more details.
-**
-** You should have received a copy of the GNU General Public License
-** along with imapproxy; if not, write to the Free Software
-** Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
-**
+** This file is part of SquirrelMail IMAP Proxy.
 **
 **  Facility:
 **
@@ -29,16 +17,16 @@
 **
 **  Authors:
 **
-**	Author: Dave McMurtrie <davemcmurtrie@hotmail.com>
+**      Dave McMurtrie <davemcmurtrie@hotmail.com>
 **
-**  RCS:
+**  Version:
 **
-**	$Source: /afs/pitt.edu/usr12/dgm/work/IMAP_Proxy/src/RCS/icc.c,v $
-**	$Id: icc.c,v 1.8 2005/06/15 12:02:08 dgm Exp $
-**      
+**      $Id: icc.c 14571 2016-09-14 02:16:55Z pdontthink $
+**
 **  Modification History:
 **
-**	$Log: icc.c,v $
+**      $Log$
+**
 **	Revision 1.8  2005/06/15 12:02:08  dgm
 **	Include config.h.
 **
@@ -63,7 +51,6 @@
 **
 **	Revision 1.1  2002/07/03 12:06:58  dgm
 **	Initial revision
-**
 **
 */
 
@@ -147,20 +134,27 @@ static void _ICC_Recycle( unsigned int Expiration )
 		   Expiration ) )
 	    {
 		syslog(LOG_INFO, "Expiring server sd [%d]", HashEntry->server_conn->sd);
-		/* Logout of the imap server and close the server socket. */
+		/* Logout of the IMAP server and close the server socket. */
 
-		IMAP_Write( HashEntry->server_conn, "VIC20 LOGOUT\r\n",
-			    strlen( "VIC20 LOGOUT\r\n" ) );
+		if (HashEntry->server_conn->sd != -1)
+		{
+		    IMAP_Write( HashEntry->server_conn, "VIC20 LOGOUT\r\n",
+		    	        strlen( "VIC20 LOGOUT\r\n" ) );
 
 #if HAVE_LIBSSL
-		if ( HashEntry->server_conn->tls )
-		{
-		    SSL_shutdown( HashEntry->server_conn->tls );
-		    SSL_free( HashEntry->server_conn->tls );
-		}
+		    if ( HashEntry->server_conn->tls )
+		    {
+		        SSL_shutdown( HashEntry->server_conn->tls );
+		        SSL_free( HashEntry->server_conn->tls );
+		    }
 #endif
-		close( HashEntry->server_conn->sd );
-		free( HashEntry->server_conn );
+		    close( HashEntry->server_conn->sd );
+		    free( HashEntry->server_conn );
+		}
+		else
+		{
+		    syslog(LOG_INFO, "Expiring invalidated server sd");
+		}
 		
 		/*
 		 * This was being counted as a "retained" connection.  It was
@@ -260,13 +254,8 @@ extern void ICC_Recycle_Loop( void )
  * Authors:	Dave McMurtrie <davemcmurtrie@hotmail.com>
  *--
  */
-extern void ICC_Logout( char *Username, ICD_Struct *conn )
+extern void ICC_Logout( ICC_Struct *ICC )
 {
-    char *fn = "ICC_Logout()";
-    unsigned int HashIndex;
-    ICC_Struct *HashEntry = NULL;
-    ICC_Struct *ICC_Active = NULL;
-    
     IMAPCount->InUseServerConnections--;
     IMAPCount->RetainedServerConnections++;
 
@@ -274,39 +263,36 @@ extern void ICC_Logout( char *Username, ICD_Struct *conn )
 	 IMAPCount->PeakRetainedServerConnections )
 	IMAPCount->PeakRetainedServerConnections = IMAPCount->RetainedServerConnections;
     
-    
-    HashIndex = Hash( Username, HASH_TABLE_SIZE );
-    
-    LockMutex( &mp );
-    
-    for ( HashEntry = ICC_HashTable[ HashIndex ]; 
-	  HashEntry; 
-	  HashEntry = HashEntry->next )
-    {
-	if ( ( strcmp( Username, HashEntry->username ) == 0 ) &&
-	     ( HashEntry->server_conn->sd == conn->sd ) )
-	{
-	    ICC_Active = HashEntry;
-	}
-    }
-    
-    if ( !ICC_Active )
-    {
-	UnLockMutex( &mp );
-	
-	syslog(LOG_WARNING, "%s: Cannot find ICC for '%s' on server sd %d to set logout time.", fn, Username, conn->sd );
-	return;
-    }
-    
-    ICC_Active->logouttime = time(0);
+    ICC->logouttime = time(0);
 
-    UnLockMutex( &mp );
-    
-    syslog(LOG_INFO, "LOGOUT: '%s' from server sd [%d]", Username, conn->sd );
+    syslog(LOG_INFO, "LOGOUT: '%s' from server sd [%d]", ICC->username, ICC->server_conn->sd );
     
     return;
 }
 
+void _ICC_Invalidate ( ICC_Struct *ICC )
+{
+    #if HAVE_LIBSSL
+    if ( ICC->server_conn->tls ) {
+        SSL_shutdown( ICC->server_conn->tls );
+        SSL_free( ICC->server_conn->tls );
+    }
+    #endif
+
+    close( ICC->server_conn->sd );
+
+    syslog(LOG_INFO, "Invalidating server sd [%d]", ICC->server_conn->sd);
+
+    ICC->server_conn->sd = -1; /* make sure this can't be reused */
+    ICC->logouttime = 1;
+}
+
+extern void ICC_Invalidate ( ICC_Struct *ICC )
+{
+    LockMutex( &mp );
+    _ICC_Invalidate ( ICC );
+    UnLockMutex( &mp );
+}
 
 
 /*

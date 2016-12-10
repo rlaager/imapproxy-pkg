@@ -1,23 +1,11 @@
 /*
-** 
-**               Copyright (c) 2002,2003 Dave McMurtrie
 **
-** This file is part of imapproxy.
+** Copyright (c) 2010-2016 The SquirrelMail Project Team
+** Copyright (c) 2002-2010 Dave McMurtrie
 **
-** imapproxy is free software; you can redistribute it and/or modify
-** it under the terms of the GNU General Public License as published by
-** the Free Software Foundation; either version 2 of the License, or
-** (at your option) any later version.
+** Licensed under the GNU GPL. For full terms see the file COPYING.
 **
-** imapproxy is distributed in the hope that it will be useful,
-** but WITHOUT ANY WARRANTY; without even the implied warranty of
-** MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-** GNU General Public License for more details.
-**
-** You should have received a copy of the GNU General Public License
-** along with imapproxy; if not, write to the Free Software
-** Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
-**
+** This file is part of SquirrelMail IMAP Proxy.
 **
 **  Facility:
 **
@@ -31,16 +19,16 @@
 **
 **  Authors:
 **
-**	Dave McMurtrie <davemcmurtrie@hotmail.com>
+**      Dave McMurtrie <davemcmurtrie@hotmail.com>
 **
-**  RCS:
+**  Version:
 **
-**	$Source: /afs/andrew.cmu.edu/usr18/dave64/work/IMAP_Proxy/src/RCS/main.c,v $
-**	$Id: main.c,v 1.40 2009/10/16 14:34:16 dave64 Exp $
-**      
+**      $Id: main.c 14573 2016-09-14 02:55:23Z pdontthink $
+**
 **  Modification History:
 **
-**      $Log: main.c,v $
+**      $Log$
+**
 **      Revision 1.40  2009/10/16 14:34:16  dave64
 **      Applied patch by Jose Luis Tallon to improve server connect retry logic.
 **
@@ -196,13 +184,12 @@
 **	Revision 1.1  2002/07/03 12:07:51  dgm
 **	Initial revision
 **
-**
 */
 
 
-static char *rcsId = "$Id: main.c,v 1.40 2009/10/16 14:34:16 dave64 Exp $";
-static char *rcsSource = "$Source: /afs/andrew.cmu.edu/usr18/dave64/work/IMAP_Proxy/src/RCS/main.c,v $";
-static char *rcsAuthor = "$Author: dave64 $";
+static char *sourceRevision = "$Revision: 14573 $";
+static char *sourceVersion = "$Id: main.c 14573 2016-09-14 02:55:23Z pdontthink $";
+static char *sourceAuthor = "$Author: pdontthink $";
 
 #define _REENTRANT
 
@@ -246,19 +233,20 @@ static char *rcsAuthor = "$Author: dave64 $";
 /*
  * Global variables.  Many of these things are global just as an optimization.
  * For example, there's no reason to have to do a hostname lookup every
- * single time we want to connect to the imap server.  We do it once and 
+ * single time we want to connect to the IMAP server.  We do it once and 
  * store it globally.
  */
 char Banner[BUFSIZE];                /* banner line returned from IMAP svr */
 unsigned int BannerLen;
 char Capability[BUFSIZE];            /* IMAP capability line from server */
 unsigned int CapabilityLen;
-ISD_Struct ISD;                      /* global imap server descriptor */
+ISD_Struct ISD;                      /* global IMAP server descriptor */
 ICC_Struct *ICC_free;                /* ICC free listhead */
 ICC_Struct *ICC_HashTable[ HASH_TABLE_SIZE ];
-IMAPCounter_Struct *IMAPCount;       /* global imap counter struct */
+IMAPCounter_Struct *IMAPCount;       /* global IMAP counter struct */
 pthread_mutex_t mp;                  /* "main" mutex used for ICC sync */
 pthread_mutex_t trace;               /* mutex used for username tracing */
+pthread_mutex_t aimtx;               /* mutex used for DNS RR */
 char TraceUser[MAXUSERNAMELEN];      /* username we want to trace */
 int Tracefd;                         /* fd of our trace file (always open) */
 ProxyConfig_Struct PC_Struct;        /* Global configuration data */
@@ -296,7 +284,7 @@ int main( int argc, char *argv[] )
     const char *fn = "main()";
     char f_randfile[ PATH_MAX ];
     int listensd;                      /* socket descriptor we'll bind to */
-    int clientsd;                      /* incoming socket descriptor */
+    long clientsd;                     /* incoming socket descriptor */
     int sockaddrlen;                       
     struct sockaddr_storage srvaddr;
     struct sockaddr_storage cliaddr;
@@ -314,6 +302,9 @@ int main( int argc, char *argv[] )
     char PidFile[ MAXPATHLEN ];		/* path to our pidfile */
 #ifdef HAVE_LIBWRAP
     struct request_info r;             /* request struct for libwrap */
+#endif
+#if HAVE_LIBSSL
+    int tls_options;
 #endif
     struct addrinfo aihints, *ai;
     int gaierrnum;
@@ -421,6 +412,13 @@ int main( int argc, char *argv[] )
 	exit( 1 );
     }
 
+    rc = pthread_mutex_init(&aimtx, NULL);
+    if ( rc )
+    {
+	syslog(LOG_ERR, "%s: pthread_mutex_init() returned error [%d] initializing aimtx mutex.  Exiting.", fn, rc );
+	exit( 1 );
+    }
+
     TraceUser[0] = '\0';
     
     syslog( LOG_INFO, "%s: Allocating %d IMAP connection structures.", 
@@ -453,71 +451,135 @@ int main( int argc, char *argv[] )
     
     memset( ICC_HashTable, 0, sizeof ICC_HashTable );
 
+
+#if HAVE_LIBSSL
+    /* Initialize SSL_CTX */
+    syslog( LOG_INFO, "%s: Enabling openssl library.", fn );
+    SSL_library_init();
+
+    /* Set up OpenSSL thread protection */
+    ssl_thread_setup(fn);
+
+#ifndef HAVE_RAND_EGD
+    if ( RAND_egd( ( RAND_file_name( f_randfile, sizeof( f_randfile ) ) == f_randfile ) ? f_randfile : "/.rnd" ) ) 
+#endif
+    {
+	if ( RAND_load_file( f_randfile, -1 ) )
+	    RAND_write_file( f_randfile );
+    }
+
+    SSL_load_error_strings();
+
+    /* 
+     * Despite its name, SSLv23_client_method() negociates highest
+     * version possible, which includes TLSv1.0, TLSv1.1, and TLSv1.2. 
+     * SSLv2 and SSLv3 are disabled using SSL_OP_NO_SSLv2 and 
+     * SSL_OP_NO_SSLv3 below.
+     */ 
+    tls_ctx = SSL_CTX_new( SSLv23_client_method() );
+    if ( tls_ctx == NULL )
+    { 
+	syslog(LOG_ERR, "%s: Failed to create new SSL_CTX.  Exiting.", fn);
+	exit( 1 );
+    }
+ 
+    /* Work around all known bugs, disable SSLv2 and SSLv3 */
+    tls_options = SSL_OP_ALL | SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3;
+
+    if ( PC_Struct.tls_no_tlsv1 ) 
+        tls_options |= SSL_OP_NO_TLSv1;
+
+#ifdef SSL_OP_NO_TLSv1_1
+    if ( PC_Struct.tls_no_tlsv1_1 ) 
+        tls_options |= SSL_OP_NO_TLSv1_1;
+#endif
+
+#ifdef SSL_OP_NO_TLSv1_2
+    if ( PC_Struct.tls_no_tlsv1_2 ) 
+        tls_options |= SSL_OP_NO_TLSv1_2;
+#endif
+
+    SSL_CTX_set_options( tls_ctx, tls_options );
+ 
+    if ( PC_Struct.tls_ca_file != NULL || PC_Struct.tls_ca_path != NULL )
+    {
+	rc = SSL_CTX_load_verify_locations( tls_ctx,
+					    PC_Struct.tls_ca_file,
+					    PC_Struct.tls_ca_path );
+    }
+    else
+    {
+	rc = SSL_CTX_set_default_verify_paths( tls_ctx );
+    }
+    if ( rc == 0 )
+    { 
+	syslog(LOG_ERR, "%s: Failed to load CA data.  Exiting.", fn);
+	exit( 1 );
+    }
+ 
+    if ( ! set_cert_stuff( tls_ctx,
+			    PC_Struct.tls_cert_file,
+			    PC_Struct.tls_key_file ) )
+    { 
+	syslog(LOG_ERR, "%s: Failed to load cert/key data.  Exiting.", fn);
+	exit( 1 );
+    }
+
+    if ( PC_Struct.tls_verify_server ) 
+        SSL_CTX_set_verify(tls_ctx, SSL_VERIFY_PEER, verify_callback);
+    else
+        SSL_CTX_set_verify(tls_ctx, SSL_VERIFY_NONE, verify_callback);
+
+    if ( PC_Struct.tls_ciphers != NULL )
+    {
+        SSL_CTX_set_cipher_list( tls_ctx, PC_Struct.tls_ciphers );    
+    }
+
+    /* Enable ECDHE is OpenSSL has it */
+#if !defined(OPENSSL_NO_ECDH) && OPENSSL_VERSION_NUMBER >= 0x10000000L
+#ifdef NID_X9_62_prime256v1
+    {
+        EC_KEY *ecdh;
+
+        ecdh = EC_KEY_new_by_curve_name( NID_X9_62_prime256v1 );
+        SSL_CTX_set_tmp_ecdh( tls_ctx, ecdh );
+        EC_KEY_free( ecdh );
+    }
+#endif
+#endif
+#endif /* HAVE_LIBSSL */
+
+
     ServerInit();
     
     /* Daemonize() would go here */
 
     SetBannerAndCapability();
     
-    if ( PC_Struct.login_disabled || PC_Struct.force_tls )
+
+    /*
+     * We don't need to check PC_Struct.support_starttls since we
+     * probably have refetched the capability list after a STARTTLS
+     * if we did one; it won't ever be supported at this point.
+     *
+     * It also makes no difference to check PC_Struct.force_tls now
+     * because we've either done a STARTTLS or we haven't - all that
+     * matters is if we got LOGINDISABLED or not.
+     *
+     * Note that all these things *ARE* tested when checking the
+     * server capabilities (in fact, the following check is probably
+     * a duplicate).
+     */
+    if ( PC_Struct.login_disabled )
     {
-	syslog( LOG_INFO, "%s: Enabling STARTTLS.", fn );
-#if HAVE_LIBSSL
-	if ( PC_Struct.support_starttls )
-	{
-	    /* Initialize SSL_CTX */
-	    SSL_library_init();
-
-	    /* Set up OpenSSL thread protection */
-	    ssl_thread_setup(fn);
-	    
-            /* Need to seed PRNG, too! */
-            if ( RAND_egd( ( RAND_file_name( f_randfile, sizeof( f_randfile ) ) == f_randfile ) ? f_randfile : "/.rnd" ) ) 
-	    {
-                /* Not an EGD, so read and write it. */
-                if ( RAND_load_file( f_randfile, -1 ) )
-                    RAND_write_file( f_randfile );
-            }
-	
-	    SSL_load_error_strings();
-	    tls_ctx = SSL_CTX_new( TLSv1_client_method() );
-	    if ( tls_ctx == NULL )
-	    {
-		syslog(LOG_ERR, "%s: Failed to create new SSL_CTX.  Exiting.", fn);
-		exit( 1 );
-	    }
-
-	    /* Work around all known bugs */
-	    SSL_CTX_set_options( tls_ctx, SSL_OP_ALL );
-
-	    if ( ! SSL_CTX_load_verify_locations( tls_ctx,
-						  PC_Struct.tls_ca_file,
-						  PC_Struct.tls_ca_path ) ||
-		 ! SSL_CTX_set_default_verify_paths( tls_ctx ) )
-	    {
-		syslog(LOG_ERR, "%s: Failed to load CA data.  Exiting.", fn);
-		exit( 1 );
-	    }
-
-	    if ( ! set_cert_stuff( tls_ctx,
-				   PC_Struct.tls_cert_file,
-				   PC_Struct.tls_key_file ) )
-	    {
-		syslog(LOG_ERR, "%s: Failed to load cert/key data.  Exiting.", fn);
-		exit( 1 );
-	    }
-
-	    SSL_CTX_set_verify(tls_ctx, SSL_VERIFY_NONE, verify_callback);
-	}
-	else
-#endif /* HAVE_LIBSSL */
-	{
-	    /* We're screwed!  We won't be able to login without SASL */
-	    syslog(LOG_ERR, "%s: IMAP server has LOGINDISABLED and we can't do STARTTLS.  Exiting.", fn);
-	    exit( 1 );
-	}
+	/* We're screwed!  We can't login */
+	syslog(LOG_ERR,
+		"%s: IMAP server has LOGINDISABLED.  Exiting.",
+		fn);
+	exit( 1 );
     }
-    
+
+
     memset( &aihints, 0, sizeof aihints );
     aihints.ai_family = AF_UNSPEC;
     aihints.ai_socktype = SOCK_STREAM;
@@ -638,8 +700,8 @@ int main( int argc, char *argv[] )
     /* launch a recycle thread before we loop */
     pthread_create( &RecycleThread, &attr, (void *)ICC_Recycle_Loop, NULL );
 
-    syslog(LOG_INFO, "%s: Launched ICC recycle thread with id %d", 
-	   fn, (int)RecycleThread );
+    syslog(LOG_INFO, "%s: Launched ICC recycle thread with id %lu", 
+	   fn, (unsigned long int)RecycleThread );
 
     /*
      * Now start listening and accepting connections.
@@ -651,7 +713,7 @@ int main( int argc, char *argv[] )
 	exit( 1 );
     }
 
-    syslog( LOG_INFO, "%s: imapproxy version %s normal server startup.", fn, IMAP_PROXY_VERSION );
+    syslog( LOG_INFO, "%s: squirrelmail-imap_proxy version %s normal server startup.", fn, IMAP_PROXY_VERSION );
 
     /*
      * Main server loop
@@ -693,7 +755,11 @@ int main( int argc, char *argv[] )
 	     IMAPCount->PeakClientConnections )
 	    IMAPCount->PeakClientConnections = IMAPCount->CurrentClientConnections;
 	
-	pthread_create( &ThreadId, &attr, (void *)HandleRequest, (void *)clientsd );
+	rc = pthread_create( &ThreadId, &attr, (void *)HandleRequest, (void *)clientsd );
+	if (rc != 0) {
+	    syslog(LOG_ERR, "%s: pthread_create() returned error [%d] for HandleRequest.", fn, rc );
+	    close(clientsd);
+	}
 	
     }
 }
@@ -800,12 +866,21 @@ static void ServerInit( void )
     }
     
     
-    /* grab a host entry for the imap server. */
+    /* grab a host entry for the IMAP server. */
     syslog( LOG_INFO, "%s: proxying to IMAP server '%s'.", fn, 
 	    PC_Struct.server_hostname );
     
     memset( &aihints, 0, sizeof aihints );
-    aihints.ai_family = AF_UNSPEC;
+    switch ( PC_Struct.ipversion )
+    {
+         case 4: aihints.ai_family = AF_INET;
+                 syslog( LOG_INFO, "%s: limiting to IPv4 only", fn);
+                 break;
+         case 6: aihints.ai_family = AF_INET6;
+                 syslog( LOG_INFO, "%s: limiting to IPv6 only", fn);
+                 break;
+         default: aihints.ai_family = AF_UNSPEC;
+    }
     aihints.ai_socktype = SOCK_STREAM;
 
     for( ;; )
@@ -826,8 +901,24 @@ static void ServerInit( void )
     }
 
     syslog(LOG_INFO, "%s: Proxying to IMAP port %s", 
-	   fn, PC_Struct.server_port );
+           fn, PC_Struct.server_port );
         
+    // Since IMAP Proxy uses STARTTLS and does not speak "imaps",
+    // let's spit out an informative warning message if the server
+    // port was configured to 993, which, 99.9% of the time, is a
+    // mistake
+    //
+    if (strcmp(PC_Struct.server_port, "993") == 0)
+        syslog(LOG_ERR, "WARNING: IMAP Proxy uses STARTTLS to encrypt a \"normal\" IMAP connection and does not support direct TLS/SSL connections that are typically served on port 993 (but there is a way around this if the server is only available on that port - see README.ssl).  Chances are you have misconfigured the server_port setting, and that it should be something more like port 143.  If the server at '%s' supports STARTTLS from an unencrypted connection on port 993, then you can ignore this (but, again, chances are that this is NOT the case).", PC_Struct.server_hostname);
+
+    /*
+     * check for DNS RR
+     */
+    if ( ai->ai_next && PC_Struct.dnsrr ) /* at least a second RR was returned */
+        syslog(LOG_INFO, "%s: Using DNS RR", fn);
+    else
+        PC_Struct.dnsrr = 0;
+
     /* 
      * fill in the address family, the host address, and the
      * service port of our global socket address structure
@@ -909,7 +1000,11 @@ void Daemonize( const char* pidfile )
  int i;
 
     /* detach from our parent if necessary */
-    if (! (getppid() == 1) && ( ! PC_Struct.foreground_mode ) )
+    // NOTE: When started under systemd, the parent PID is already 1, so
+    //       the safety check below of the parent PID causes imap_proxy
+    //       to start in foreground mode. I'm commenting it out, hoping
+    //       it doesn't cause issues in other contexts
+    if (/*! (getppid() == 1) &&*/ ( ! PC_Struct.foreground_mode ) )
     {
 	syslog( LOG_INFO, "%s: Configured to run in background mode.", fn );
 
@@ -978,8 +1073,8 @@ void Daemonize( const char* pidfile )
 /*++
  * Function:	ParseBannerAndCapability
  *
- * Purpose:	Weed out stuff that imapproxy does not support from a banner
- *              line or a capability line.
+ * Purpose:	Weed out stuff that squirrelmail-imap_proxy does not
+ *              support from a banner line or a capability line.
  *
  * Parameters:	char * - Buffer for storing the cleaned up string.
  *              unsigned int - buflen
@@ -1014,6 +1109,7 @@ static int ParseBannerAndCapability( char *DestBuf,
 	exit( 1 );
     }
     
+    syslog( LOG_INFO, "%s: Attempting to parse capability string: %s", fn, SourceBuf);
     
     /*
      * strip out all of the AUTH mechanisms except the ones that we support.
@@ -1057,7 +1153,6 @@ static int ParseBannerAndCapability( char *DestBuf,
 	     */
 	    endbracket = 0;
  	    inCap = 0;
-	    strcat( DestBuf, " " );
 	    strcat( DestBuf, " XIMAPPROXY]" );
 
 	    continue;
@@ -1140,6 +1235,7 @@ static int ParseBannerAndCapability( char *DestBuf,
 	    if ( ! strncasecmp( CP, "STARTTLS", strlen( "STARTTLS" ) ) )
 	    {
 	        PC_Struct.support_starttls = STARTTLS_SUPPORTED;
+	        //syslog( LOG_INFO, "%s: Found out the server supports STARTTLS, even though we don't", fn);
 	        continue;
 	    }
 	
@@ -1160,7 +1256,7 @@ static int ParseBannerAndCapability( char *DestBuf,
     
     /*
      * Add a 'XIMAPPROXY' CAPABILITY response to indicate that the
-     * current connection is handled by imapproxy.
+     * current connection is handled by squirrelmail-imap_proxy.
      */
     if ( capability == 1 )
     {
@@ -1216,7 +1312,7 @@ static void SetBannerAndCapability( void )
 	
 	if ( connect( sd, (struct sockaddr *)ISD.srv->ai_addr, 
 		      ISD.srv->ai_addrlen ) == -1 ) 	{
-	    syslog(LOG_ERR, "%s: connect() to imap server on socket [%d] failed: %s -- retrying", fn, sd, strerror(errno));
+	    syslog(LOG_ERR, "%s: connect() to IMAP server on socket [%d] failed: %s -- retrying", fn, sd, strerror(errno));
 	    close( sd );
 	    
 	    sleep( 15 );    /* IMAP server may not be started yet. */
@@ -1260,7 +1356,7 @@ static void SetBannerAndCapability( void )
      */
     if ( strncasecmp( Banner, IMAP_UNTAGGED_OK, strlen(IMAP_UNTAGGED_OK)) )
     {
-	syslog(LOG_ERR, "%s: Unexpected response from imap server on initial connection: %s -- Exiting.", fn, Banner);
+	syslog(LOG_ERR, "%s: Unexpected response from IMAP server on initial connection: %s -- Exiting.", fn, Banner);
 	close( itd.conn->sd );
 	exit( 1 );
     }
@@ -1321,11 +1417,108 @@ static void SetBannerAndCapability( void )
     
     if ( strncasecmp( itd.ReadBuf, IMAP_TAGGED_OK, strlen(IMAP_TAGGED_OK) ) )
     {
-	syslog(LOG_ERR, "%s: Received non-OK tagged reponse from imap server on CAPABILITY command -- exiting.", fn );
+	syslog(LOG_ERR, "%s: Received non-OK tagged reponse from IMAP server on CAPABILITY command -- exiting.", fn );
 	close( itd.conn->sd );
 	exit( 1 );
     }
     
+    /*
+     * If we're using it, attempt STARTTLS before doing one more
+     * CAPABILITY so our capability string is accurate
+     */
+    if ( PC_Struct.login_disabled || PC_Struct.force_tls )
+    {
+#if HAVE_LIBSSL
+	if ( PC_Struct.support_starttls != STARTTLS_NOT_SUPPORTED )
+	{
+	    if ( Attempt_STARTTLS( &itd ) != 0 )
+	    {
+		syslog(LOG_ERR, "%s: STARTTLS failed for CAPABILITY check -- exiting.", fn );
+		close( itd.conn->sd );
+		exit( 1 );
+	    }
+	    else
+	    {
+		/*
+		 * STARTTLS was successful, so we can proceed
+		 * to get the new CAPABILITY list - first,
+		 * send a CAPABILITY command to the server.
+		 */
+		if ( IMAP_Write( itd.conn, "1 CAPABILITY\r\n", strlen("1 CAPABILITY\r\n") ) == -1 )
+		{
+		    syslog(LOG_ERR, "%s: Unable to send capability command to server: %s -- exiting.", fn, strerror(errno) );
+		    close( itd.conn->sd );
+		    exit( 1 );
+		}
+
+		/*
+		 * From RFC2060:
+		 * The server MUST send a single untagged
+		 * CAPABILITY response with "IMAP4rev1" as one of the listed
+		 * capabilities before the (tagged) OK response.
+		 *
+		 * The means we should read exactly 2 lines of data back from the server.
+		 * The first will be the untagged capability line.
+		 * The second will be the OK response with the tag in it.
+		 */
+
+		BytesRead = IMAP_Line_Read( &itd );
+		if ( BytesRead == -1 )
+		{
+		    syslog( LOG_ERR, "%s: Failed to read capability response from server: %s --  exiting.", fn, strerror( errno ) );
+		    close( itd.conn->sd );
+		    exit( 1 );
+		}
+
+		if ( itd.LiteralBytesRemaining )
+		{
+		    syslog( LOG_ERR, "%s: Server sent unexpected literal specifier in CAPABILITY response -- Exiting.", fn );
+		    close( itd.conn->sd );
+		    exit ( 1 );
+		}
+
+		CapabilityLen = ParseBannerAndCapability( Capability, sizeof Capability - 1,
+		itd.ReadBuf, BytesRead, 1 );
+
+		/* Now read the tagged response and make sure it's OK */
+		BytesRead = IMAP_Line_Read( &itd );
+		if ( BytesRead == -1 )
+		{
+		    syslog( LOG_ERR, "%s: Failed to read capability response from server: %s -- exiting.", fn, strerror( errno ) );
+		    close( itd.conn->sd );
+		    exit( 1 );
+		}
+
+		if ( itd.LiteralBytesRemaining )
+		{
+		    syslog( LOG_ERR, "%s: Server sent unexpected literal specifier in tagged CAPABILITY response -- exiting.", fn );
+		    exit( 1 );
+		}
+
+		if ( strncasecmp( itd.ReadBuf, IMAP_TAGGED_OK, strlen(IMAP_TAGGED_OK) ) )
+		{
+		    syslog(LOG_ERR, "%s: Received non-OK tagged reponse from imap server on CAPABILITY command -- exiting.", fn );
+		    close( itd.conn->sd );
+		    exit( 1 );
+		}
+	    }
+	}
+	else
+#endif /* HAVE_LIBSSL */
+	{
+	    /* We're screwed!  We won't be able to login without SASL */
+	    syslog(LOG_ERR,
+		"%s: IMAP server has LOGINDISABLED and we can't do STARTTLS.  Exiting.",
+		fn);
+	    close( itd.conn->sd );
+	    exit( 1 );
+	}
+    }
+    else
+    {
+	//syslog( LOG_ERR, "%s: Not trying STARTTLS and second CAPABILITY.", fn );
+    }
+
     /* Be nice and logout */
     if ( IMAP_Write( itd.conn, "2 LOGOUT\r\n", strlen("2 LOGOUT\r\n") ) == -1 )
     {
@@ -1445,7 +1638,6 @@ static int set_cert_stuff(SSL_CTX * ctx,
  *                          \          |
  *                           \_________|
  */
-
 
 
 

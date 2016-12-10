@@ -1,23 +1,11 @@
 /*
-** 
-**               Copyright (c) 2002,2003 Dave McMurtrie
 **
-** This file is part of imapproxy.
+** Copyright (c) 2010-2016 The SquirrelMail Project Team
+** Copyright (c) 2002-2010 Dave McMurtrie
 **
-** imapproxy is free software; you can redistribute it and/or modify
-** it under the terms of the GNU General Public License as published by
-** the Free Software Foundation; either version 2 of the License, or
-** (at your option) any later version.
+** Licensed under the GNU GPL. For full terms see the file COPYING.
 **
-** imapproxy is distributed in the hope that it will be useful,
-** but WITHOUT ANY WARRANTY; without even the implied warranty of
-** MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-** GNU General Public License for more details.
-**
-** You should have received a copy of the GNU General Public License
-** along with imapproxy; if not, write to the Free Software
-** Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
-**
+** This file is part of SquirrelMail IMAP Proxy.
 **
 **  Facility:
 **
@@ -30,16 +18,16 @@
 **
 **  Authors:
 **
-**	Dave McMurtrie <davemcmurtrie@hotmail.com>
+**      Dave McMurtrie <davemcmurtrie@hotmail.com>
 **
-**  RCS:
+**  Version:
 **
-**	$Source: /afs/andrew.cmu.edu/usr18/dave64/work/IMAP_Proxy/src/RCS/imapcommon.c,v $
-**	$Id: imapcommon.c,v 1.25 2008/10/20 13:23:04 dave64 Exp $
-**      
+**      $Id: imapcommon.c 14573 2016-09-14 02:55:23Z pdontthink $
+**
 **  Modification History:
 **
-**	$Log: imapcommon.c,v $
+**      $Log$
+**
 **	Revision 1.25  2008/10/20 13:23:04  dave64
 **	Applied patch by Michael M. Slusarz to support XPROXYREUSE.
 **
@@ -133,7 +121,6 @@
 **	Revision 1.1  2002/07/03 12:07:26  dgm
 **	Initial revision
 **
-**
 */
 
 
@@ -172,8 +159,14 @@ extern ICC_Struct *ICC_HashTable[ HASH_TABLE_SIZE ];
 extern ISD_Struct ISD;
 extern pthread_mutex_t mp;
 extern pthread_mutex_t trace;
+extern pthread_mutex_t aimtx;
 extern IMAPCounter_Struct *IMAPCount;
 extern ProxyConfig_Struct PC_Struct;
+
+/*
+ *  * Function prototypes for internal entry points.
+ *   */
+static int send_queued_preauth_commands( char *, ITD_Struct * );
 
 #if HAVE_LIBSSL
 extern SSL_CTX *tls_ctx;
@@ -351,7 +344,155 @@ extern void UnLockMutex( pthread_mutex_t *mutex )
     return;
 }
 
-    
+
+/*++
+ * Function:	Attempt_STARTTLS
+ *
+ * Purpose:	Upgrade plain text connection/negotiate STARTTLS
+ *
+ * Parameters:	ptr to an IMAPTransactionDescriptor structure
+ *
+ * Returns:	0 on success
+ *         	-1 on failure
+ *
+ * Authors:	Dave McMurtrie <davemcmurtrie@hotmail.com>
+ *
+ * Notes: 	This function assumes that SSL support has already
+ *       	been initialized.
+ * 
+ *        	This function is a result of re-factoring of existing
+ *       	code resulting from a patch submitted by Martin B.
+ *       	Smith <smithmb@ufl.edu>
+ *--
+ */
+#if HAVE_LIBSSL
+extern int Attempt_STARTTLS( ITD_Struct *Server )
+{
+    char *fn = "Attempt_STARTTLS()";
+
+    unsigned int BufLen = BUFSIZE - 1;
+    char SendBuf[BUFSIZE];
+    char *tokenptr;
+    char *endptr;
+    char *last;
+    int rc;
+
+
+    syslog( LOG_INFO, "%s: Enabling STARTTLS.", fn );
+
+	snprintf( SendBuf, BufLen, "S0001 STARTTLS\r\n" );
+	if ( IMAP_Write( Server->conn, SendBuf, strlen(SendBuf) ) == -1 )
+	{
+	    syslog(LOG_INFO, "STARTTLS failed: IMAP_Write() failed attempting to send STARTTLS command to IMAP server: %s", strerror( errno ) );
+	    goto fail;
+	}
+
+	/*
+	 * Read the server response
+	 */
+	if ( ( rc = IMAP_Line_Read( Server ) ) == -1 )
+	{
+	    syslog(LOG_INFO, "STARTTLS failed: No response from IMAP server after sending STARTTLS command" );
+	    goto fail;
+	}
+
+	if ( Server->LiteralBytesRemaining )
+	{
+	    syslog(LOG_ERR, "%s: Unexpected string literal in server response.", fn );
+	    goto fail;
+	}
+
+
+	/*
+	 * Try to match up the tag in the server response to the client tag.
+	 */
+	endptr = Server->ReadBuf + rc;
+
+	tokenptr = memtok( Server->ReadBuf, endptr, &last );
+
+	if ( !tokenptr )
+	{
+	    /*
+	     * no tokens found in server response?  Not likely, but we still
+	     * have to check.
+	     */
+	    syslog(LOG_INFO, "STARTTLS failed: server response to STARTTLS command contained no tokens." );
+	    goto fail;
+	}
+
+	if ( memcmp( (const void *)tokenptr, (const void *)"S0001",
+			strlen( tokenptr ) ) )
+	{
+	    /*
+	     * non-matching tag read back from the server... Lord knows what this
+	     * is, so we'll fail.
+	     */
+	    syslog(LOG_INFO, "STARTTLS failed: server response to STARTTLS command contained non-matching tag." );
+	    goto fail;
+	}
+
+	/*
+	 * Now that we've matched the tags up, see if the response was 'OK'
+	 */
+	tokenptr = memtok( NULL, endptr, &last );
+
+	if ( !tokenptr )
+	{
+	    /* again, not likely but we still have to check... */
+	    syslog(LOG_INFO, "STARTTLS failed: Malformed server response to STARTTLS command" );
+	    goto fail;
+	}
+
+	if ( memcmp( (const void *)tokenptr, "OK", 2 ) )
+	{
+	    /*
+	     * If the server sent back a "NO" or "BAD", we can look at the actual
+	     * server logs to figure out why.  We don't have to break our ass here
+	     * putting the string back together just for the sake of logging.
+	     */
+	    syslog(LOG_INFO, "STARTTLS failed: non-OK server response to STARTTLS command" );
+	    goto fail;
+	}
+
+	Server->conn->tls = SSL_new( tls_ctx );
+	if ( Server->conn->tls == NULL )
+	{
+	    syslog(LOG_INFO, "STARTTLS failed: SSL_new() failed" );
+	    goto fail;
+	}
+
+	SSL_clear( Server->conn->tls );
+	rc = SSL_set_fd( Server->conn->tls, Server->conn->sd );
+	if ( rc == 0 )
+	{
+	    syslog(LOG_INFO,
+		    "STARTTLS failed: SSL_set_fd() failed: %d",
+		    SSL_get_error( Server->conn->tls, rc ) );
+	    goto fail;
+	}
+
+	SSL_set_connect_state( Server->conn->tls );
+	rc = SSL_connect( Server->conn->tls );
+	if ( rc <= 0 )
+	{
+	    syslog(LOG_INFO,
+		    "STARTTLS failed: SSL_connect() failed, %d: %s",
+		    SSL_get_error( Server->conn->tls, rc ), SSLerrmessage() );
+	    goto fail;
+	}
+
+	return 0;
+
+  fail:
+    if ( Server->conn->tls )
+    {
+	SSL_shutdown( Server->conn->tls );
+	SSL_free( Server->conn->tls );
+    }
+    return -1;
+}
+#endif
+
 
 /*++
  * Function:	Get_Server_conn
@@ -367,6 +508,13 @@ extern void UnLockMutex( pthread_mutex_t *mutex )
  *              ptr to client port string (for logging only)
  *              unsigned char - flag to indicate that the client sent the
  *                              password as a string literal.
+ *              ptr to string that will be filled with the server's
+ *                            full response (minus tag) to a
+ *                            login/authentication request when available.
+ *                            NOTE: string must be allocated space at least
+ *                            as big as an ITD's ReadBuf (BUFSIZE)
+TODO: change this in the future to be a linked list:
+ *		ptr to a single queued pre-auth command string
  *
  * Returns:	ICD * on success
  *              NULL on failure
@@ -381,12 +529,19 @@ extern ICD_Struct *Get_Server_conn( char *Username,
 				    char *Password,
 				    const char *ClientAddr,
 				    const char *portstr,
-				    unsigned char LiteralPasswd )
+				    unsigned char LiteralPasswd,
+				    char *fullResponse,
+				    char *queued_preauth_command )
 {
     char *fn = "Get_Server_conn()";
     unsigned int HashIndex;
     ICC_Struct *HashEntry = NULL;
     char SendBuf[BUFSIZE];
+
+    char EncodedAuthBuf[BUFSIZE];
+    char AuthBuf[BUFSIZE];
+    char AuthBufIndex;
+
     unsigned int BufLen = BUFSIZE - 1;
     char md5pw[MD5_DIGEST_LENGTH];
     char *tokenptr;
@@ -397,6 +552,7 @@ extern ICD_Struct *Get_Server_conn( char *Username,
     ITD_Struct Server;
     int rc;
     unsigned int Expiration;
+    struct addrinfo *useai;
 
     EVP_MD_CTX mdctx;
     int md_len;
@@ -512,6 +668,16 @@ extern ICD_Struct *Get_Server_conn( char *Username,
 		/* Set the ICD as 'reused' */
 		ICC_Active->server_conn->reused = 1;
 
+		// send queued pre-auth commands
+		Server.conn = ICC_Active->server_conn;
+		if ( send_queued_preauth_commands( queued_preauth_command, &Server ) )
+		{
+			syslog( LOG_INFO,
+				"LOGIN: '%s' (%s:%s) failed: Unable to send queued pre-auth commands",
+				Username, ClientAddr, portstr );
+			goto fail;
+		}
+
 		return( ICC_Active->server_conn );
 	    }
 	}
@@ -520,19 +686,43 @@ extern ICD_Struct *Get_Server_conn( char *Username,
     
     UnLockMutex( &mp );
     
+    syslog( LOG_INFO,
+	    "LOGIN: '%s' (%s:%s) no previous connection: creating a new one",
+	    Username, ClientAddr, portstr);
+
     /*
      * We don't have an active connection for this user, or the password
      * didn't match.
      * Open a connection to the IMAP server so we can attempt to login 
      */
     Server.conn = ( ICD_Struct * ) malloc( sizeof ( ICD_Struct ) );
+    if (Server.conn == NULL) {
+	syslog( LOG_ERR, "%s: malloc() failed: %s -- Exiting.", __func__,
+		strerror( errno ) );
+	exit( 1 );
+    }
     memset( Server.conn, 0, sizeof ( ICD_Struct ) );
 
     /* As a new connection, the ICD is not 'reused' */
     Server.conn->reused = 0;
 
-    Server.conn->sd = socket( ISD.srv->ai_family, ISD.srv->ai_socktype, 
-			      ISD.srv->ai_protocol );
+    if (PC_Struct.dnsrr)
+    {
+        LockMutex( &aimtx );
+        /* cycle through returned hosts */
+        if ( ISD.srv->ai_next )
+            ISD.srv = ISD.srv->ai_next;
+        else
+            ISD.srv = ISD.airesults;
+    
+        useai = ISD.srv;
+        UnLockMutex( &aimtx );
+    }
+    else
+        useai = ISD.srv;
+
+    Server.conn->sd = socket( useai->ai_family, useai->ai_socktype, 
+			      useai->ai_protocol );
     if ( Server.conn->sd == -1 )
     {
 	syslog( LOG_INFO,
@@ -547,8 +737,8 @@ extern ICD_Struct *Get_Server_conn( char *Username,
 	setsockopt( Server.conn->sd, SOL_SOCKET, SO_KEEPALIVE, &onoff, sizeof onoff );
     }
     
-    if ( connect( Server.conn->sd, (struct sockaddr *)ISD.srv->ai_addr, 
-		  ISD.srv->ai_addrlen ) == -1 )
+    if ( connect( Server.conn->sd, (struct sockaddr *)useai->ai_addr, 
+		  useai->ai_addrlen ) == -1 )
     {
 	syslog( LOG_INFO,
 		"LOGIN: '%s' (%s:%s) failed: Unable to connect to IMAP server: %s",
@@ -585,103 +775,8 @@ extern ICD_Struct *Get_Server_conn( char *Username,
 #if HAVE_LIBSSL
     if ( PC_Struct.login_disabled || PC_Struct.force_tls )
     {
-	snprintf( SendBuf, BufLen, "S0001 STARTTLS\r\n" );
-	if ( IMAP_Write( Server.conn, SendBuf, strlen(SendBuf) ) == -1 )
+	if ( Attempt_STARTTLS( &Server ) != 0 )
 	{
-	    syslog(LOG_INFO, "STARTTLS failed: IMAP_Write() failed attempting to send STARTTLS command to IMAP server: %s", strerror( errno ) );
-	    goto fail;
-	}
-
-	/*
-	 * Read the server response
-	 */
-	if ( ( rc = IMAP_Line_Read( &Server ) ) == -1 )
-	{
-	    syslog(LOG_INFO, "STARTTLS failed: No response from IMAP server after sending STARTTLS command" );
-	    goto fail;
-	}
-
-	if ( Server.LiteralBytesRemaining )
-	{
-	    syslog(LOG_ERR, "%s: Unexpected string literal in server response.", fn );
-	    goto fail;
-	
-	}
-	
-    
-	/*
-	 * Try to match up the tag in the server response to the client tag.
-	 */
-	endptr = Server.ReadBuf + rc;
-    
-	tokenptr = memtok( Server.ReadBuf, endptr, &last );
-    
-	if ( !tokenptr )
-	{
-	    /* 
-	     * no tokens found in server response?  Not likely, but we still
-	     * have to check.
-	     */
-	    syslog(LOG_INFO, "STARTTLS failed: server response to STARTTLS command contained no tokens." );
-	    goto fail;
-	}
-    
-	if ( memcmp( (const void *)tokenptr, (const void *)"S0001", 
-		     strlen( tokenptr ) ) )
-	{
-	    /* 
-	     * non-matching tag read back from the server... Lord knows what this
-	     * is, so we'll fail.
-	     */
-	    syslog(LOG_INFO, "STARTTLS failed: server response to STARTTLS command contained non-matching tag." );
-	    goto fail;
-	}
-    
-	/*
-	 * Now that we've matched the tags up, see if the response was 'OK'
-	 */
-	tokenptr = memtok( NULL, endptr, &last );
-    
-	if ( !tokenptr )
-	{
-	    /* again, not likely but we still have to check... */
-	    syslog(LOG_INFO, "STARTTLS failed: Malformed server response to STARTTLS command" );
-	    goto fail;
-	}
-    
-	if ( memcmp( (const void *)tokenptr, "OK", 2 ) )
-	{
-	    /*
-	     * If the server sent back a "NO" or "BAD", we can look at the actual
-	     * server logs to figure out why.  We don't have to break our ass here
-	     * putting the string back together just for the sake of logging.
-	     */
-	    syslog(LOG_INFO, "STARTTLS failed: non-OK server response to STARTTLS command" );
-	    goto fail;
-	}
-    
-	Server.conn->tls = SSL_new( tls_ctx );
-	if ( Server.conn->tls == NULL )
-	{
-	    syslog(LOG_INFO, "STARTTLS failed: SSL_new() failed" );
-	    goto fail;
-	}
-	    
-	SSL_clear( Server.conn->tls );
-	rc = SSL_set_fd( Server.conn->tls, Server.conn->sd );
-	if ( rc == 0 )
-	{
-	    syslog(LOG_INFO, "STARTTLS failed: SSL_set_fd() failed: %d",
-		   SSL_get_error( Server.conn->tls, rc ) );
-	    goto fail;
-	}
-
-	SSL_set_connect_state( Server.conn->tls );
-	rc = SSL_connect( Server.conn->tls );
-	if ( rc <= 0 )
-	{
-	    syslog(LOG_INFO, "STARTTLS failed: SSL_connect() failed, %d: %s",
-		   SSL_get_error( Server.conn->tls, rc ), SSLerrmessage() );
 	    goto fail;
 	}
 
@@ -690,11 +785,224 @@ extern ICD_Struct *Get_Server_conn( char *Username,
 #endif /* HAVE_LIBSSL */
 
 
+    // send queued pre-auth commands
+    if ( send_queued_preauth_commands( queued_preauth_command, &Server ) )
+    {
+	syslog( LOG_INFO,
+		"LOGIN: '%s' (%s:%s) failed: Unable to send queued pre-auth commands",
+		Username, ClientAddr, portstr );
+	goto fail;
+    }
+
+
     /*
-     * Send the login command off to the IMAP server.  Have to treat a literal
-     * password different.
+     * Send and validate pre-authentication command if given
      */
-    if ( LiteralPasswd )
+    if ( PC_Struct.preauth_command )
+    {
+	snprintf( SendBuf, BufLen, "P0001 %s\r\n", PC_Struct.preauth_command );
+	
+	if ( IMAP_Write( Server.conn, SendBuf, strlen(SendBuf) ) == -1 )
+	{
+	    syslog( LOG_INFO,
+		    "PREAUTH failed: IMAP_Write() failed attempting to send pre-authentication command to IMAP server: %s",
+		    strerror( errno ) );
+	    goto fail;
+	}
+    
+	// Read the server response
+	//
+	for ( ;; )
+	{
+	    if ( ( rc = IMAP_Line_Read( &Server ) ) == -1 )
+	    {
+		syslog( LOG_INFO,
+			"PREAUTH failed: No response from IMAP server after sending pre-authentication command (%s)",
+			PC_Struct.preauth_command );
+		goto fail;
+	    }
+
+	    if ( Server.LiteralBytesRemaining )
+	    {
+		syslog(LOG_ERR, "%s: Unexpected string literal in server pre-authentication response.", fn );
+		goto fail;
+	    }
+	
+	    if ( Server.ReadBuf[0] != '*' )
+		break;
+	}
+    
+    
+	// Try to match up the tag in the server response to the client tag.
+	//
+	endptr = Server.ReadBuf + rc;
+    
+	tokenptr = memtok( Server.ReadBuf, endptr, &last );
+    
+	if ( !tokenptr )
+	{
+
+	    // no tokens found in server response?  Not likely, but we still
+	    // have to check.
+	    //
+	    syslog( LOG_INFO, "PREAUTH failed: server response to pre-authentication command contained no tokens." );
+	    goto fail;
+	}
+    
+	if ( memcmp( (const void *)tokenptr, (const void *)"P0001", strlen( tokenptr ) ) )
+	{
+
+	    // non-matching tag read back from the server... Lord knows what this
+	    // is, so we'll fail.
+	    //
+	    syslog( LOG_INFO, "PREAUTH failed: server response to pre-authentication command contained non-matching tag." );
+	    goto fail;
+	}
+    
+    
+	// Now that we've matched the tags up, see if the response was 'OK'
+	//
+	tokenptr = memtok( NULL, endptr, &last );
+    
+	if ( !tokenptr )
+	{
+	    // again, not likely but we still have to check... 
+	    //
+	    syslog( LOG_INFO, "PREAUTH failed: Malformed server response to pre-authentication command" );
+	    goto fail;
+	}
+    
+	if ( memcmp( (const void *)tokenptr, "OK", 2 ) )
+	{
+	    // In order to log the full server response (minus the tag),
+	    // we want to re-construct the ReadBuf starting at the location
+	    // currently pointed to by tokenptr.  Thus, we put back the
+	    // last space that memtok() had replaced with a null characater
+	    // (at location pointed to by last).
+	    //
+	    *last = ' ';
+
+	    // Then we re-adjust endptr to point to the CR at the end of
+	    // the line and set to NULL (a few lines below) so we can use
+	    // the rest of the response information as a normal string
+	    // 
+	    endptr = memchr( last + 1, '\r', endptr - (last + 1) );
+
+	    // No CR is unexpected; does this indicate malformed response?
+	    // Probably.  Anyway, we'll just give up on finding any other
+	    // info from the server.
+	    //
+	    if ( !endptr )
+	    endptr = last;
+
+	    *endptr = '\0';
+
+	    syslog( LOG_INFO,
+		"PREAUTH failed: non-OK server response to pre-authentication command (%s): %s",
+		PC_Struct.preauth_command, tokenptr );
+	    goto fail;
+	}
+    }
+    
+
+    /*
+     * If configured to do so, execute SASL PLAIN authentication
+     * using the static authentication username and password from
+     * configuration (auth_sasl_plain_username/auth_sasl_plain_password).
+     *
+     * Note that because this means no password is required from
+     * the client, we won't allow this means of authentication
+     * without the client sending a shared secret instead, which
+     * must match what's in the configuration (auth_shared_secret).
+     */
+    if ( PC_Struct.auth_sasl_plain_username
+	&& PC_Struct.auth_sasl_plain_password
+	&& PC_Struct.auth_shared_secret )
+    {
+	/*
+	 * Check shared secret first (accounting for when a password
+	 * is wrapped in quotes)
+	 */
+	if ( *Password == '"' && *(Password + strlen( Password ) - 1) == '"' )
+	    rc = strncmp( Password + 1, PC_Struct.auth_shared_secret, strlen( Password ) - 2 );
+	else
+	    rc = strcmp( Password, PC_Struct.auth_shared_secret );
+	if ( rc != 0 )
+	{
+	    syslog( LOG_INFO,
+		    "LOGIN: '%s' (%s:%s) failed: shared secret was wrong",
+		    Username, ClientAddr, portstr );
+	    goto fail;
+	}
+
+	/*
+	 * Build SASL AUTH PLAIN string:
+	 * username\0authentication_username\0authentication_password
+	 */
+	char *ptr_username;
+	unsigned int username_size;
+
+	/*
+	 * But first, if username is enclosed in quotes, skip the
+	 * first one and overwrite the second with \0 (with pointer
+	 * math for our use below, since we are still working on
+	 * the original Username)
+	 */
+	ptr_username = Username;
+	username_size = strlen( Username );
+	if ( *ptr_username == '"' && *(ptr_username + username_size - 1) == '"' )
+	{
+	    ++ptr_username;
+	    username_size = username_size - 2;
+	}
+
+	/*
+	 * Add username and \0 to AUTH PLAIN buffer
+	 */
+	if ( username_size > BufLen - 1 )
+	    username_size = BufLen - 1;
+	memcpy( AuthBuf, ptr_username, username_size );
+	AuthBuf[username_size] = '\0';
+	AuthBufIndex = username_size;
+
+	/*
+	 * Add authentication username and \0 to AUTH PLAIN buffer
+	 */
+	AuthBufIndex += snprintf( AuthBuf + AuthBufIndex + 1,
+				BufLen - AuthBufIndex - 1,
+				"%s",
+				PC_Struct.auth_sasl_plain_username );
+
+	/*
+	 * Add authentication password to AUTH PLAIN buffer
+	 */
+	AuthBufIndex += snprintf( AuthBuf + AuthBufIndex + 2,
+				BufLen - AuthBufIndex - 2,
+				"%s",
+				PC_Struct.auth_sasl_plain_password );
+
+	EVP_EncodeBlock( EncodedAuthBuf, AuthBuf, AuthBufIndex + 2 );
+
+	snprintf( SendBuf, BufLen, "A0001 AUTHENTICATE PLAIN %s\r\n", EncodedAuthBuf );
+
+	/* syslog( LOG_INFO, "sending auth plain '%s'", EncodedAuthBuf ); */
+
+	if ( IMAP_Write( Server.conn, SendBuf, strlen(SendBuf) ) == -1 )
+	{
+	    syslog( LOG_INFO,
+		    "LOGIN: '%s' (%s:%s) failed: IMAP_Write() failed attempting to send AUTHENTICATE command to IMAP server: %s",
+		    Username, ClientAddr, portstr, strerror( errno ) );
+	    goto fail;
+	}
+    }
+
+
+    /*
+     * Otherwise, send a normal login command off to the IMAP server.
+     *
+     * ... but login command has to treat literal passwords differently:
+     */
+    else if ( LiteralPasswd )
     {
 	snprintf( SendBuf, BufLen, "A0001 LOGIN %s {%d}\r\n", 
 		  Username, strlen( Password ) );
@@ -745,11 +1053,13 @@ extern ICD_Struct *Get_Server_conn( char *Username,
 	    goto fail;
 	}
     }
+
+
+    /*
+     * Just send the login command via normal means.
+     */
     else
     {
-	/*
-	 * just send the login command via normal means.
-	 */
 	snprintf( SendBuf, BufLen, "A0001 LOGIN %s %s\r\n", 
 		  Username, Password );
 	
@@ -847,16 +1157,38 @@ extern ICD_Struct *Get_Server_conn( char *Username,
 	goto fail;
     }
     
+    // In order to give the full server response (minus the tag)
+    // back to the caller, we want to re-construct the ReadBuf
+    // starting at the location currently pointed to by tokenptr.
+    // Thus, we put back the last space that memtok() had replaced
+    // with a null characater (at location pointed to by last).
+    //
+    *last = ' ';
+
+    // Then we re-adjust endptr to point to the CR at the end of
+    // the line and set to NULL (a few lines below) so we can use
+    // the rest of the response information as a normal string
+    // 
+    endptr = memchr( last + 1, '\r', endptr - (last + 1) );
+
+    // No CR is unexpected; does this indicate malformed response?
+    // Probably.  Anyway, we'll just give up on finding any other
+    // info from the server.
+    //
+    if ( !endptr )
+	endptr = last;
+
+    *endptr = '\0';
+
+    // Put the response text into the fullResponse parameter for the caller
+    //
+    strcpy( fullResponse, tokenptr );
+
     if ( memcmp( (const void *)tokenptr, "OK", 2 ) )
     {
-	/*
-	 * If the server sent back a "NO" or "BAD", we can look at the actual
-	 * server logs to figure out why.  We don't have to break our ass here
-	 * putting the string back together just for the sake of logging.
-	 */
 	syslog( LOG_INFO,
-		"LOGIN: '%s' (%s:%s) failed: non-OK server response to LOGIN command",
-		Username, ClientAddr, portstr );
+		"LOGIN: '%s' (%s:%s) failed: non-OK server response to LOGIN command: %s",
+		Username, ClientAddr, portstr, fullResponse );
 	goto fail;
     }
     
@@ -898,6 +1230,8 @@ extern ICD_Struct *Get_Server_conn( char *Username,
 	    ICC_Active->logouttime = 0;    /* zero means, "it's active". */
 	    ICC_Active->server_conn = Server.conn;
 	    
+	    Server.conn->ICC = ICC_Active;
+
 	    UnLockMutex( &mp );
 	    
 	    IMAPCount->InUseServerConnections++;
@@ -949,6 +1283,166 @@ extern ICD_Struct *Get_Server_conn( char *Username,
 }
 
     
+
+
+
+/*++
+ * Function:	send_queued_preauth_commands
+ *
+ * Purpose:	Sends queued pre-auth commands to a server connection.
+ *		The commands have been kept in memory by the proxy
+ *	 	server until the client sent an auth/login command.
+ *
+TODO: change this in the future to be a linked list:
+ * Parameters:	ptr to a single queued pre-auth command string
+ *		ptr to an IMAPTransactionDescriptor structure
+ *
+ * Returns:	non-zero if any of the commands failed
+ *
+ * Authors:	Paul Lesniewski
+ *--
+ */
+static int send_queued_preauth_commands( char *queued_preauth_command, ITD_Struct *Server )
+{
+    char *fn = "send_queued_preauth_commands()";
+    unsigned int BufLen = BUFSIZE - 1;
+    char SendBuf[BUFSIZE];
+    int rc;
+    char *tokenptr;
+    char *endptr;
+    char *last;
+    int tag_count = 0;
+
+//TODO: this line is where we would put a for loop to iterate over a linked list of saved preauth commands if we ever decide to implement the ability to have more than one........... NOTE in that case, when done here (error or success), we'd want to clear the list and free the memory it took
+if ( strlen( queued_preauth_command ) )
+    {
+	// "QP" == "Queued Preauth" (just plain "P" is already taken)
+	snprintf( SendBuf, BufLen, "QP%04d %s\r\n", ++tag_count, queued_preauth_command );
+	
+	if ( IMAP_Write( Server->conn, SendBuf, strlen(SendBuf) ) == -1 )
+	{
+	    syslog( LOG_INFO,
+		    "QUEUED PREAUTH failed: IMAP_Write() failed attempting to send queued pre-authentication command to IMAP server: %s",
+		    strerror( errno ) );
+	    goto fail;
+	}
+    
+	// Read the server response
+	//
+	for ( ;; )
+	{
+	    if ( ( rc = IMAP_Line_Read( Server ) ) == -1 )
+	    {
+		syslog( LOG_INFO,
+			"QUEUED PREAUTH failed: No response from IMAP server after sending queued pre-authentication command (%s)",
+			queued_preauth_command );
+		goto fail;
+	    }
+
+	    if ( Server->LiteralBytesRemaining )
+	    {
+		syslog(LOG_ERR, "%s: Unexpected string literal in server queued pre-authentication response.", fn );
+		goto fail;
+	    }
+	
+	    if ( Server->ReadBuf[0] != '*' )
+		break;
+	}
+    
+    
+	// Try to match up the tag in the server response to the client tag.
+	//
+	endptr = Server->ReadBuf + rc;
+    
+	tokenptr = memtok( Server->ReadBuf, endptr, &last );
+    
+	if ( !tokenptr )
+	{
+
+	    // no tokens found in server response?  Not likely, but we still
+	    // have to check.
+	    //
+	    syslog( LOG_INFO, "QUEUED PREAUTH failed: server response to queued pre-authentication command contained no tokens." );
+	    goto fail;
+	}
+    
+        // make SendBuf just contain the tag so we can compare it
+	SendBuf[6] = '\0';
+	if ( memcmp( (const void *)tokenptr, (const void *)SendBuf, strlen( tokenptr ) ) )
+	{
+
+	    // non-matching tag read back from the server... Lord knows what this
+	    // is, so we'll fail.
+	    //
+	    syslog( LOG_INFO, "QUEUED PREAUTH failed: server response to queued pre-authentication command contained non-matching tag." );
+	    goto fail;
+	}
+    
+    
+	// Now that we've matched the tags up, see if the response was 'OK'
+	//
+	tokenptr = memtok( NULL, endptr, &last );
+    
+	if ( !tokenptr )
+	{
+	    // again, not likely but we still have to check... 
+	    //
+	    syslog( LOG_INFO, "QUEUED PREAUTH failed: Malformed server response to queued pre-authentication command" );
+	    goto fail;
+	}
+    
+	if ( memcmp( (const void *)tokenptr, "OK", 2 ) )
+	{
+	    // In order to log the full server response (minus the tag),
+	    // we want to re-construct the ReadBuf starting at the location
+	    // currently pointed to by tokenptr.  Thus, we put back the
+	    // last space that memtok() had replaced with a null characater
+	    // (at location pointed to by last).
+	    //
+	    *last = ' ';
+
+	    // Then we re-adjust endptr to point to the CR at the end of
+	    // the line and set to NULL (a few lines below) so we can use
+	    // the rest of the response information as a normal string
+	    // 
+	    endptr = memchr( last + 1, '\r', endptr - (last + 1) );
+
+	    // No CR is unexpected; does this indicate malformed response?
+	    // Probably.  Anyway, we'll just give up on finding any other
+	    // info from the server.
+	    //
+	    if ( !endptr )
+	    endptr = last;
+
+	    *endptr = '\0';
+
+	    syslog( LOG_INFO,
+		"QUEUED PREAUTH failed: non-OK server response to queued pre-authentication command (%s): %s",
+		queued_preauth_command,
+		tokenptr );
+	    goto fail;
+	}
+    }
+
+
+    // finsihed without any errors
+    return 0;
+
+
+  fail:
+#if HAVE_LIBSSL
+    if ( Server->conn->tls )
+    {
+	SSL_shutdown( Server->conn->tls );
+	SSL_free( Server->conn->tls );
+    }
+#endif
+    close( Server->conn->sd );
+    free( Server->conn );
+    return 1;
+}
+
+
 
 
 
@@ -1250,7 +1744,7 @@ extern int IMAP_Literal_Read( ITD_Struct *ITD )
 /*++
  * Function:	IMAP_Line_Read
  *
- * Purpose:	Line-oriented buffered reads from the imap server
+ * Purpose:	Line-oriented buffered reads from the IMAP server
  *
  * Parameters:	ptr to a IMAPTransactionDescriptor structure
  *

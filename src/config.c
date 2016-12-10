@@ -1,23 +1,11 @@
 /*
-** 
-**               Copyright (c) 2002,2003 Dave McMurtrie
 **
-** This file is part of imapproxy.
+** Copyright (c) 2010-2016 The SquirrelMail Project Team
+** Copyright (c) 2002-2010 Dave McMurtrie
 **
-** imapproxy is free software; you can redistribute it and/or modify
-** it under the terms of the GNU General Public License as published by
-** the Free Software Foundation; either version 2 of the License, or
-** (at your option) any later version.
+** Licensed under the GNU GPL. For full terms see the file COPYING.
 **
-** imapproxy is distributed in the hope that it will be useful,
-** but WITHOUT ANY WARRANTY; without even the implied warranty of
-** MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-** GNU General Public License for more details.
-**
-** You should have received a copy of the GNU General Public License
-** along with imapproxy; if not, write to the Free Software
-** Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
-**
+** This file is part of SquirrelMail IMAP Proxy.
 **
 **  Facility:
 **
@@ -32,14 +20,14 @@
 **
 **      Dave McMurtrie <davemcmurtrie@hotmail.com>
 **
-**  RCS:
+**  Version:
 **
-**      $Source: /afs/andrew.cmu.edu/usr18/dave64/work/IMAP_Proxy/src/RCS/config.c,v $
-**      $Id: config.c,v 1.18 2009/10/16 14:34:49 dave64 Exp $
-**      
+**      $Id: config.c 14573 2016-09-14 02:55:23Z pdontthink $
+**
 **  Modification History:
 **
-**      $Log: config.c,v $
+**      $Log$
+**
 **      Revision 1.18  2009/10/16 14:34:49  dave64
 **      Applied patch by Jose Luis Tallon to improve server connect retry logic.
 **
@@ -99,7 +87,6 @@
 **
 **      Revision 1.1  2002/12/17 14:26:49  dgm
 **      Initial revision
-**
 **
 */
 
@@ -341,6 +328,8 @@ void SetDefaultConfigValues(ProxyConfig_Struct *PC_Struct)
 {
     PC_Struct->server_connect_retries = DEFAULT_SERVER_CONNECT_RETRIES;
     PC_Struct->server_connect_delay = DEFAULT_SERVER_CONNECT_DELAY;
+    PC_Struct->ipversion = 0;
+    PC_Struct->dnsrr = 0;
 
     return;
 }
@@ -406,6 +395,18 @@ extern void SetConfigOptions( char *ConfigFile )
     ADD_TO_TABLE( "cache_expiration_time", SetNumericValue, 
 		  &PC_Struct.cache_expiration_time, index );
 
+    ADD_TO_TABLE( "preauth_command", SetStringValue,
+		  &PC_Struct.preauth_command, index );
+
+    ADD_TO_TABLE( "auth_sasl_plain_username", SetStringValue,
+		  &PC_Struct.auth_sasl_plain_username, index );
+    
+    ADD_TO_TABLE( "auth_sasl_plain_password", SetStringValue,
+		  &PC_Struct.auth_sasl_plain_password, index );
+
+    ADD_TO_TABLE( "auth_shared_secret", SetStringValue,
+		  &PC_Struct.auth_shared_secret, index);
+
     ADD_TO_TABLE( "proc_username", SetStringValue,
 		  &PC_Struct.proc_username, index );
     
@@ -436,6 +437,21 @@ extern void SetConfigOptions( char *ConfigFile )
     ADD_TO_TABLE( "tls_key_file", SetStringValue,
 		  &PC_Struct.tls_key_file, index );
 
+    ADD_TO_TABLE( "tls_ciphers", SetStringValue,
+		  &PC_Struct.tls_ciphers, index );
+
+    ADD_TO_TABLE( "tls_verify_server", SetBooleanValue,
+		  &PC_Struct.tls_verify_server, index );
+
+    ADD_TO_TABLE( "tls_no_tlsv1", SetBooleanValue,
+		  &PC_Struct.tls_no_tlsv1, index );
+
+    ADD_TO_TABLE( "tls_no_tlsv1.1", SetBooleanValue,
+		  &PC_Struct.tls_no_tlsv1_1, index );
+
+    ADD_TO_TABLE( "tls_no_tlsv1.2", SetBooleanValue,
+		  &PC_Struct.tls_no_tlsv1_2, index );
+
     ADD_TO_TABLE( "send_tcp_keepalives", SetBooleanValue,
 		  &PC_Struct.send_tcp_keepalives, index );
 
@@ -453,6 +469,12 @@ extern void SetConfigOptions( char *ConfigFile )
 
     ADD_TO_TABLE( "enable_admin_commands", SetBooleanValue,
 		  &PC_Struct.enable_admin_commands, index );
+    
+    ADD_TO_TABLE( "ipversion_only", SetNumericValue,
+		  &PC_Struct.ipversion, index );
+    
+    ADD_TO_TABLE( "dns_rr", SetBooleanValue,
+		  &PC_Struct.dnsrr, index );
     
     ConfigTable[index].Keyword[0] = '\0';
     
@@ -509,6 +531,24 @@ extern void SetConfigOptions( char *ConfigFile )
 	}
 	
 	Value = CP;
+
+	// we don't just want the next token, we want the rest of the line
+	// (put back the space that strtok() changed into a null character)
+	//
+	Value[ strlen( Value ) ] = ' ';
+
+	// however, we then have to be careful to remove trailing whitespace
+	//
+	i = strlen( Value ) - 1;
+	while ( ( Value[ i ] == ' ' )
+	     || ( Value[ i ] == '\t' )
+	     || ( Value[ i ] == '\r' )
+	     || ( Value[ i ] == '\n' ) )
+	{
+	    i--;
+	}
+	if ( i < ( strlen( Value ) - 1 ) )
+	    Value[ i + 1 ] = '\0';
 	
 	for (i = 0; ConfigTable[i].Keyword[0] != '\0'; i++ )
 	{

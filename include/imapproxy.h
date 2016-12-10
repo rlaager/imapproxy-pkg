@@ -1,23 +1,11 @@
 /*
-** 
-**               Copyright (c) 2002,2003 Dave McMurtrie
 **
-** This file is part of imapproxy.
+** Copyright (c) 2010-2016 The SquirrelMail Project Team
+** Copyright (c) 2002-2010 Dave McMurtrie
 **
-** imapproxy is free software; you can redistribute it and/or modify
-** it under the terms of the GNU General Public License as published by
-** the Free Software Foundation; either version 2 of the License, or
-** (at your option) any later version.
+** Licensed under the GNU GPL. For full terms see the file COPYING.
 **
-** imapproxy is distributed in the hope that it will be useful,
-** but WITHOUT ANY WARRANTY; without even the implied warranty of
-** MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-** GNU General Public License for more details.
-**
-** You should have received a copy of the GNU General Public License
-** along with imapproxy; if not, write to the Free Software
-** Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
-**
+** This file is part of SquirrelMail IMAP Proxy.
 **
 **  Facility:
 **
@@ -25,20 +13,20 @@
 **
 **  Abstract:
 **
-**	Common definitions and function prototypes for the imap proxy server.
+**	Common definitions and function prototypes for the IMAP proxy server.
 **
 **  Authors:
 **
 **      Dave McMurtrie <davemcmurtrie@hotmail.com>
 **
-**  RCS:
+**  Version:
 **
-**      $Source: /afs/andrew.cmu.edu/usr18/dave64/work/IMAP_Proxy/include/RCS/imapproxy.h,v $
-**      $Id: imapproxy.h,v 1.30 2009/10/16 14:35:17 dave64 Exp $
-**      
+**      $Id: imapproxy.h 14573 2016-09-14 02:55:23Z pdontthink $
+**
 **  Modification History:
 **
-**      $Log: imapproxy.h,v $
+**      $Log$
+**
 **      Revision 1.30  2009/10/16 14:35:17  dave64
 **      Applied patch by Jose Luis Tallon to improve server connect retry logic.
 **
@@ -146,7 +134,6 @@
 **      Revision 1.1  2002/07/03 11:21:12  dgm
 **      Initial revision
 **
-**
 */
 
 
@@ -161,8 +148,13 @@
 
 #if HAVE_LIBSSL
 #include <openssl/ssl.h>
+#include <openssl/md5.h>
 #include <openssl/rand.h>
 #include <limits.h>
+#endif
+
+#ifndef PR_SET_NO_NEW_PRIVS
+#define PR_SET_NO_NEW_PRIVS 38
 #endif
 
 
@@ -172,12 +164,12 @@
 #define PGM                     "in.imapproxyd"
 #define IMAP_UNTAGGED_OK        "* OK "           /* untagged OK response    */
 #define IMAP_TAGGED_OK          "1 OK "           /* tagged OK response      */
-#define BUFSIZE                 4096              /* default buffer size     */
+#define BUFSIZE                 8192              /* default buffer size     */
 #define MAX_CONN_BACKLOG        5                 /* tcp connection backlog  */
 #define MAXTAGLEN               256               /* max IMAP tag length     */
 #define MAXMAILBOXNAME          512               /* max mailbox name length */
-#define MAXUSERNAMELEN          64                /* max username length     */
-#define MAXPASSWDLEN            64                /* max passwd length       */
+#define MAXUSERNAMELEN          256               /* max username length     */
+#define MAXPASSWDLEN            8192              /* max passwd length       */
 #define POLL_TIMEOUT_MINUTES    30                /* Poll timeout in minutes */
 #define POLL_TIMEOUT            (POLL_TIMEOUT_MINUTES * 60000)
 #define SELECT_BUF_SIZE         BUFSIZE           /* max length of a SELECT  */
@@ -242,6 +234,7 @@ struct IMAPConnectionDescriptor
     SSL *tls;                        /* TLS connection context               */
 #endif
     struct IMAPSelectCache ISC;      /* Cached SELECT data                   */
+    struct IMAPConnectionContext *ICC; /* backreference the ICC */
     unsigned int reused;             /* Was the connection reused?           */
 };
 
@@ -270,7 +263,7 @@ struct IMAPTransactionDescriptor
 struct IMAPConnectionContext
 {
     struct IMAPConnectionDescriptor *server_conn;
-    char username[64];                  /* username connected on this sd     */
+    char username[MAXUSERNAMELEN];      /* username connected on this sd     */
     char hashedpw[16];                  /* md5 hash copy of password         */
     time_t logouttime;                  /* time the user logged out last     */
     struct IMAPConnectionContext *next; /* linked list next pointer          */
@@ -281,7 +274,7 @@ struct IMAPConnectionContext
  * One ProxyConfig structure will be used globally to keep track of
  * configurable options.  All of these options are set by reading values
  * from the global config file except for support_unselect.  That's set
- * based on the CAPABILITY string from the real imap server.
+ * based on the CAPABILITY string from the real IMAP server.
  */
 struct ProxyConfig
 {
@@ -306,12 +299,23 @@ struct ProxyConfig
     char *tls_ca_path;                        /* path to directory CA certs */
     char *tls_cert_file;                      /* file with client cert */
     char *tls_key_file;                       /* file with client priv key */
+    char *tls_ciphers;                        /* TLS Cipher suite */
+    unsigned int tls_verify_server;           /* flag to require server cert validation */
+    unsigned int tls_no_tlsv1;                /* flag to disable TLSv1 */
+    unsigned int tls_no_tlsv1_1;              /* flag to disable TLSv1.1 */
+    unsigned int tls_no_tlsv1_2;              /* flag to disable TLSv1.2 */
     unsigned int force_tls;                   /* flag to force TLS */
     unsigned int enable_admin_commands;       /* flag to enable admin cmds */
     unsigned char support_unselect;           /* unselect support flag */
     unsigned char support_starttls;           /* starttls support flag */
     unsigned char login_disabled;             /* login disabled flag */
     char *chroot_directory;                   /* chroot(2) into this dir */
+    char *preauth_command;                    /* arbitrary pre-authentication command */
+    char *auth_sasl_plain_username;           /* authentication username under SASL PLAIN */
+    char *auth_sasl_plain_password;           /* authentication password under SASL PLAIN */
+    char *auth_shared_secret;                 /* REQUIRED shared secret in leiu of a user password when using LOGIN command with SASL PLAIN authentication */
+    unsigned int ipversion;                   /* limit DNS requests to AF_INET or AF_INET6 */
+    unsigned int dnsrr;                       /* cycle through all DNS entries we got */
 };
 
 
@@ -365,8 +369,8 @@ extern int IMAP_Literal_Read( ITD_Struct * );
 extern void HandleRequest( int );
 extern char *memtok( char *, char *, char ** );
 extern int imparse_isatom( const char * );
-extern ICD_Struct *Get_Server_conn( char *, char *, const char *, const char *, unsigned char );
-extern void ICC_Logout( char *, ICD_Struct * );
+extern ICD_Struct *Get_Server_conn( char *, char *, const char *, const char *, unsigned char, char *, char * );
+extern void ICC_Logout( ICC_Struct * );
 extern void ICC_Recycle( unsigned int );
 extern void ICC_Recycle_Loop( void );
 extern void LockMutex( pthread_mutex_t * );
