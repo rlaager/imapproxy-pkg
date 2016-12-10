@@ -69,9 +69,6 @@ install: build
 	$(MAKE) install prefix=$(CURDIR)/debian/imapproxy/usr
 	mv debian/imapproxy/usr/sbin/in.imapproxyd \
 		debian/imapproxy/usr/sbin/imapproxyd
-	rm -f \
-		debian/imapproxy/usr/share/doc/imapproxy/README.debian \
-		debian/imapproxy/usr/share/doc/imapproxy/README.known_issues
 
 	# prepare the default configuration file
 	perl debian/prepare-config-file < scripts/imapproxy.conf \
