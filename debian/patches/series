@@ -2,6 +2,7 @@ fix-egd-ifdef.patch
 check-dup-return-value.patch
 fix-missing-definitions.patch
 fix-size_t-formatters.patch
+fix-spelling-error.patch
 fix-ssl-types.patch
 fix-socklen_t-types.patch
 remove-unused-variables.patch
