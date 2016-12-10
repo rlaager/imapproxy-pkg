@@ -1,4 +1,4 @@
-up-imapproxy (1.2.7-2) unstable; urgency=medium
+up-imapproxy (1.2.8~svn20161210-1) unstable; urgency=medium
 
   [ Peter Eisentraut ]
   * status support (Closes: 526673)
@@ -12,7 +12,7 @@ up-imapproxy (1.2.7-2) unstable; urgency=medium
   * Update Standards-Version to 3.9.8 (no changes)
   * Standardize the name as IMAP Proxy / imapproxy
   * Tweak the package description
-  * Backport all changes to-date from SVN (Closes: 728557, 834591, 836122)
+  * Import all changes to-date from SVN (Closes: 728557, 834591, 836122)
     (LP: 1614062)
   * Make the pimpstat.8 man page useful (Closes: 518928)
   * Start after IMAP daemons (if installed) (Closes: 738882)
