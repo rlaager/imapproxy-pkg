@@ -1,10 +1,10 @@
-#### Makefile for IMAP proxy
+#### Makefile for SquirrelMail IMAP Proxy
 #### Contributed by Gary Mills <mills@cc.UManitoba.CA>
 
 # Fixed to work with configure script
 # by Devrim SERAL <devrim@gazi.edu.tr>
 
-# Cleaned up by Ken Murchison
+# Cleaned up by Ken Murchison, Brad Smith
 
 ## Tuneables
 
@@ -21,14 +21,14 @@ sbindir = $(exec_prefix)/sbin
 infodir = $(prefix)/info
 libdir = $(prefix)/lib/gnudl
 mandir = $(prefix)/man/man3
-rpm_prefix = @rpm_prefix@
 
 CC = @CC@
-CPPFLAGS = @CPPFLAGS@ 
+CPPFLAGS = @CPPFLAGS@
+CFLAGS = @CFLAGS@
 LDFLAGS = @LDFLAGS@
 LIBS = @LIBS@
 DEFINES = @DEFINES@
-FLAGS = $(CPPFLAGS) @CFLAGS@ -I. -I./include
+FLAGS = -I. -I./include
 
 INSTALL = @INSTALL@
 EBIN = $(sbindir)
@@ -64,13 +64,13 @@ all: $(XYD_BIN) $(TAT_BIN)
 $(XYD_OBJ) $(TAT_OBJ): $(MAKEFILE) ./include/common.h ./include/imapproxy.h
 
 .c.o:
-	$(CC) $(CFLAGS) $(FLAGS) -c -o $@ $<
+	$(CC) $(CFLAGS) $(FLAGS) $(CPPFLAGS) -c -o $@ $<
 
 $(XYD_BIN): $(XYD_OBJ)
 	$(CC) -o $@ $(XYD_OBJ) $(LDFLAGS) $(XYD_LIB)
 
 $(TAT_BIN): $(TAT_OBJ)
-	$(CC) -o $@ $(TAT_OBJ) $(TAT_LIB)
+	$(CC) -o $@ $(TAT_OBJ) $(LDFLAGS) $(TAT_LIB)
 
 clean:
 	rm -f ./src/core  $(XYD_OBJ) $(TAT_OBJ) $(XYD_BIN) $(TAT_BIN)
@@ -79,21 +79,24 @@ distclean: clean
 	rm -f config.cache config.log config.h Makefile
 
 install: $(XYD_BIN) $(TAT_BIN)
-	mkdir -p $(EBIN)
-	$(INSTALL) -o bin -g bin -m 0755 $(XYD_BIN) $(EBIN)
-	$(INSTALL) -o bin -g bin -m 0755 $(TAT_BIN) $(EBIN)
+	mkdir -p $(DESTDIR)$(EBIN)
+	$(INSTALL) -o bin -g bin -m 0755 $(XYD_BIN) $(DESTDIR)$(EBIN)
+	$(INSTALL) -o bin -g bin -m 0755 $(TAT_BIN) $(DESTDIR)$(EBIN)
 
-install-init:
-	$(INSTALL) -o root -g sys -m 0755 ./scripts/imapproxy.init $(ETC)/init.d/imapproxy
-	ln -s ../init.d/imapproxy /etc/rc2.d/S99imapproxy
-	ln -s ../init.d/imapproxy /etc/rc0.d/K10imapproxy
+install-init-linux:
+	$(INSTALL) -o root -g sys -m 0755 ./scripts/imapproxy-linux.init $(DESTDIR)$(ETC)/init.d/imapproxy
+	ln -s ../init.d/imapproxy $(DESTDIR)/etc/rc2.d/S99imapproxy
+	ln -s ../init.d/imapproxy $(DESTDIR)/etc/rc0.d/K10imapproxy
+
+install-init-systemd:
+	$(INSTALL) -o root -g root -m 0644 ./scripts/imap_proxy.service $(DESTDIR)/lib/systemd/system
 
 install-conf:
-	$(INSTALL) -o root -g bin -m 0644 ./scripts/imapproxy.conf $(ETC)
+	$(INSTALL) -o root -g bin -m 0644 ./scripts/imapproxy.conf $(DESTDIR)$(ETC)
 
-rpm-install: install 
-	$(INSTALL) -o root -g sys -m 0644 ./scripts/imapproxy.conf $(rpm_prefix)/etc
-	$(INSTALL) -o root -g sys -m 0755 ./scripts/imapproxy.init $(rpm_prefix)/etc/init.d/imapproxy
+rpm-install: install
+	$(INSTALL) -o root -g sys -m 0644 ./scripts/imapproxy.conf $(DESTDIR)/etc
+	$(INSTALL) -o root -g sys -m 0755 ./scripts/imapproxy-linux.init $(DESTDIR)/etc/init.d/imapproxy
 
 pkg:
 	pkgmk -o -r .
