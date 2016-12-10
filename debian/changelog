@@ -21,8 +21,11 @@ up-imapproxy (1.2.8~svn20161210-1) unstable; urgency=medium
   * Remove some useless FAQ items
   * Cleanup the README situation
   * Cleanup comments in imapproxy.conf
+  * Fix a spelling error
+  * Verify GPG signatures in debian/watch
+  * Add tony mancill as an uploader
 
- -- Richard Laager <rlaager@wiktel.com>  Wed, 30 Nov 2016 03:12:49 -0600
+ -- Richard Laager <rlaager@wiktel.com>  Sat, 10 Dec 2016 13:52:07 -0600
 
 up-imapproxy (1.2.7-1.2) unstable; urgency=medium
 
