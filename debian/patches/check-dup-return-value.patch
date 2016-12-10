@@ -1,7 +1,7 @@
 Description: Check dup() return value
  I switched to dup2() as well, which combines in the close() call.
 Author: Richard Laager <rlaager@wiktel.com>
-Forwarded: no
+Forwarded: https://sourceforge.net/p/squirrelmail/mailman/message/35526927/
 Last-Update: 2016-11-22
 --- a/src/main.c
 +++ b/src/main.c

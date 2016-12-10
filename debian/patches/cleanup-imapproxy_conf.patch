@@ -1,6 +1,6 @@
 Description: Cleanup imapproxy.conf
 Author: Richard Laager <rlaager@wiktel.com>
-Forwarded: not-needed
+Forwarded: https://sourceforge.net/p/squirrelmail/mailman/message/35543883/
 Last-Update: 2016-11-30
 --- a/scripts/imapproxy.conf
 +++ b/scripts/imapproxy.conf

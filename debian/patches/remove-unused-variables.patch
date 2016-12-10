@@ -1,6 +1,6 @@
 Description: Remove unused variables
 Author: Richard Laager <rlaager@wiktel.com>
-Forwarded: no
+Forwarded: https://sourceforge.net/p/squirrelmail/mailman/message/35526927/
 Last-Update: 2016-12-10
 --- a/src/main.c
 +++ b/src/main.c
