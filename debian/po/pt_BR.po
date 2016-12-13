@@ -1,0 +1,34 @@
+# Debconf translations for up-imapproxy.
+# Copyright (C) 2012 THE up-imapproxy'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the up-imapproxy package.
+# Adriano Rafael Gomes <adrianorg@arg.eti.br>, 2012, 2014.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: up-imapproxy\n"
+"Report-Msgid-Bugs-To: up-imapproxy@packages.debian.org\n"
+"POT-Creation-Date: 2012-02-05 08:29+0100\n"
+"PO-Revision-Date: 2014-11-20 16:54-0200\n"
+"Last-Translator: Adriano Rafael Gomes <adrianorg@arg.eti.br>\n"
+"Language-Team: Brazilian Portuguese <debian-l10n-portuguese@lists.debian."
+"org>\n"
+"Language: pt_BR\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#. Type: string
+#. Description
+#: ../templates:1001
+msgid "IMAP server to connect to:"
+msgstr "Servidor IMAP ao qual conectar:"
+
+#. Type: string
+#. Description
+#: ../templates:1001
+msgid ""
+"Please enter the hostname or address of the IMAP server ImapProxy will "
+"connect to."
+msgstr ""
+"Por favor, informe o nome de máquina ou endereço do servidor IMAP ao qual o "
+"ImapProxy se conectará."
