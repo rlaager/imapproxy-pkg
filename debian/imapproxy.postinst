@@ -60,7 +60,9 @@ case "$1" in
             ucf --debconf-ok $TMPFILE $DESTFILE
 
             # prevent incorrect time zone config (#436555)
-            if [ ! -f ${chroot_directory}/etc/localtime ]
+            chroot_directory=$(perl -ne '/^\s*chroot_directory\s*(\S+)$/ && print $1' $DESTFILE)
+            if [ -n "${chroot_directory}" ] &&
+               [ ! -f ${chroot_directory}/etc/localtime ]
             then
                 mkdir -p ${chroot_directory}/etc
                 cp /etc/localtime ${chroot_directory}/etc
