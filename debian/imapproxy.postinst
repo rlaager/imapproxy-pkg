@@ -1,4 +1,4 @@
-#! /bin/sh
+#!/bin/sh
 
 if [ -e /usr/share/debconf/confmodule ]; then
     . /usr/share/debconf/confmodule
