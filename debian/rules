@@ -79,10 +79,7 @@ install: build
 		debian/imapproxy/usr/share/imapproxy
 
 	dh_installexamples
-	chmod 644 $(CURDIR)/debian/imapproxy/usr/share/doc/imapproxy/examples/imapproxy.conf
-
-
-
+	chmod 644 debian/imapproxy/usr/share/doc/imapproxy/examples/imapproxy.conf
 
 # Build architecture-independent files here.
 binary-indep: build install
