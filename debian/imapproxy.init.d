@@ -6,12 +6,11 @@
 # Required-Start:    $syslog $network $local_fs $remote_fs
 # Required-Stop:     $syslog $local_fs $remote_fs
 # Should-Start:      $named courier-imap cyrus-imapd dovecot
-# Should-Stop:       
+# Should-Stop:
 # Default-Start:     2 3 4 5
 # Default-Stop:      0 1 6
 # Short-Description: IMAP proxy
 # Description:       Proxy IMAP connections to reduce the load on backend servers
-#                    
 ### END INIT INFO
 #
 # based upon skeleton by Miquel van Smoorenburg <miquels@cistron.nl>.
@@ -71,7 +70,7 @@ case "$1" in
 	start-stop-daemon --oknodo --stop --quiet --pidfile=$PIDFILE \
 		--exec $DAEMON -- $ARGS 2>&1 | grep warning || true > /dev/null
 	rm -f $PIDFILE
-	echo "$NAME."	
+	echo "$NAME."
 	;;
 
   restart|force-reload)

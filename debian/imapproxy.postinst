@@ -33,7 +33,7 @@ SRCFILE=/usr/share/imapproxy/imapproxy.conf.default
 case "$1" in
     configure)
 	if [ -e /usr/share/debconf/confmodule ]; then
-	
+
 	db_get imapproxy/imap-server || true
 	server_hostname="$RET"
 
@@ -69,11 +69,11 @@ case "$1" in
 	ucfr imapproxy $DESTFILE
 
 	# Clean temp file
-	rm -f $TMPFILE 	
+	rm -f $TMPFILE
 
 	else # -e /usr/share/debconf/confmodule
 		# this should never happen, really
-		test -f $DESTFILE || cp $SRCFILE $DESTFILE;	  
+		test -f $DESTFILE || cp $SRCFILE $DESTFILE;
 	fi
     ;;
 
