@@ -1,8 +1,8 @@
 Source: up-imapproxy
 Section: mail
 Priority: optional
-Maintainer: Jose Luis Tallon <jltallon@adv-solutions.net>
-Uploaders: Richard Laager <rlaager@wiktel.com>, tony mancill <tmancill@debian.org>
+Maintainer: Richard Laager <rlaager@wiktel.com>
+Uploaders: Jose Luis Tallon <jltallon@adv-solutions.net>, tony mancill <tmancill@debian.org>
 Build-Depends: autotools-dev, debhelper (>= 9), po-debconf (>= 0.8.2),
 	libwrap0-dev, libncurses-dev, libssl-dev, dh-systemd
 Homepage: http://www.imapproxy.org
