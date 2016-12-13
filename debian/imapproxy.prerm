@@ -18,9 +18,9 @@ set -e
 
 case "$1" in
     remove|upgrade|deconfigure)
-    	# remove chroot cruft... but only if we created it ourselves
-	rm -f /var/lib/imapproxy/chroot/etc/localtime
-	rmdir /var/lib/imapproxy/chroot/etc || true
+        # remove chroot cruft... but only if we created it ourselves
+    rm -f /var/lib/imapproxy/chroot/etc/localtime
+    rmdir /var/lib/imapproxy/chroot/etc || true
         ;;
     failed-upgrade)
         ;;

@@ -19,14 +19,14 @@ CFGFILE=/etc/imapproxy.conf
 
 
 case "$1" in
-	remove|upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
-		#nothing
+    remove|upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
+        #nothing
         ;;
-	purge)
-		rm -f /etc/imapproxy.conf
-		which ucf >/dev/null 2>&1 && ucf --purge $CFGFILE
-		which ucfr >/dev/null 2>&1 && ucfr --purge imapproxy $CFGFILE
-	;;
+    purge)
+        rm -f /etc/imapproxy.conf
+        which ucf >/dev/null 2>&1 && ucf --purge $CFGFILE
+        which ucfr >/dev/null 2>&1 && ucfr --purge imapproxy $CFGFILE
+    ;;
 
     *)
         echo "postrm called with unknown argument \`$1'" >&2

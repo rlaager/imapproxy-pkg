@@ -32,49 +32,49 @@ SRCFILE=/usr/share/imapproxy/imapproxy.conf.default
 
 case "$1" in
     configure)
-	if [ -e /usr/share/debconf/confmodule ]; then
+    if [ -e /usr/share/debconf/confmodule ]; then
 
-	db_get imapproxy/imap-server || true
-	server_hostname="$RET"
+    db_get imapproxy/imap-server || true
+    server_hostname="$RET"
 
-	# this should really be a debconf setting too, but it's too
-	# late to do that for lenny, so parse it here <ntyni>
-	if [ -r $DESTFILE ]
-	then
-	    CONFIGURED_PORT=$(perl -ne '/^\s*listen_port\s*(\S+)$/ && print $1' $DESTFILE)
-	fi
+    # this should really be a debconf setting too, but it's too
+    # late to do that for lenny, so parse it here <ntyni>
+    if [ -r $DESTFILE ]
+    then
+        CONFIGURED_PORT=$(perl -ne '/^\s*listen_port\s*(\S+)$/ && print $1' $DESTFILE)
+    fi
 
-	if [ "$server_hostname" = "localhost" ]; then
-		# change bind port if localhost (#470431)
-		listen_port=${CONFIGURED_PORT:-1143}
-	else
-		listen_port=${CONFIGURED_PORT:-143}
-	fi
+    if [ "$server_hostname" = "localhost" ]; then
+        # change bind port if localhost (#470431)
+        listen_port=${CONFIGURED_PORT:-1143}
+    else
+        listen_port=${CONFIGURED_PORT:-143}
+    fi
 
-	TMPFILE=`tempfile`
+    TMPFILE=`tempfile`
 
-	sed "s/^server_hostname .*/server_hostname ${server_hostname}/; \
-		s/^listen_port .*/listen_port ${listen_port}/" \
-	 < $SRCFILE > $TMPFILE
-	chmod 644 $TMPFILE
-	ucf --debconf-ok $TMPFILE $DESTFILE
+    sed "s/^server_hostname .*/server_hostname ${server_hostname}/; \
+        s/^listen_port .*/listen_port ${listen_port}/" \
+     < $SRCFILE > $TMPFILE
+    chmod 644 $TMPFILE
+    ucf --debconf-ok $TMPFILE $DESTFILE
 
-	# prevent incorrect time zone config (#436555)
-	if [ ! -f ${chroot_directory}/etc/localtime ]; then
-		mkdir ${chroot_directory}/etc || true
-		cp /etc/localtime ${chroot_directory}/etc
-	fi
+    # prevent incorrect time zone config (#436555)
+    if [ ! -f ${chroot_directory}/etc/localtime ]; then
+        mkdir ${chroot_directory}/etc || true
+        cp /etc/localtime ${chroot_directory}/etc
+    fi
 
-	# register configfile with UCF
-	ucfr imapproxy $DESTFILE
+    # register configfile with UCF
+    ucfr imapproxy $DESTFILE
 
-	# Clean temp file
-	rm -f $TMPFILE
+    # Clean temp file
+    rm -f $TMPFILE
 
-	else # -e /usr/share/debconf/confmodule
-		# this should never happen, really
-		test -f $DESTFILE || cp $SRCFILE $DESTFILE;
-	fi
+    else # -e /usr/share/debconf/confmodule
+        # this should never happen, really
+        test -f $DESTFILE || cp $SRCFILE $DESTFILE;
+    fi
     ;;
 
     abort-upgrade|abort-remove|abort-deconfigure)
