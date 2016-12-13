@@ -51,7 +51,7 @@ case "$1" in
                 listen_port=${CONFIGURED_PORT:-143}
             fi
 
-            TMPFILE=`tempfile`
+            TMPFILE=$(tempfile)
 
             sed "s/^server_hostname .*/server_hostname ${server_hostname}/; \
                 s/^listen_port .*/listen_port ${listen_port}/" \
@@ -62,7 +62,7 @@ case "$1" in
             # prevent incorrect time zone config (#436555)
             if [ ! -f ${chroot_directory}/etc/localtime ]
             then
-                mkdir ${chroot_directory}/etc || true
+                mkdir -p ${chroot_directory}/etc
                 cp /etc/localtime ${chroot_directory}/etc
             fi
 
@@ -72,7 +72,7 @@ case "$1" in
             rm -f $TMPFILE
         else
             # this should never happen, really
-            test -f $DESTFILE || cp $SRCFILE $DESTFILE;
+            test -f $DESTFILE || cp $SRCFILE $DESTFILE
         fi
     ;;
 
