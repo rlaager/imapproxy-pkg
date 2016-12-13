@@ -1,6 +1,7 @@
 #!/bin/sh
 
-if [ -e /usr/share/debconf/confmodule ]; then
+if [ -e /usr/share/debconf/confmodule ]
+then
     . /usr/share/debconf/confmodule
     db_version 2.0
 fi
@@ -30,7 +31,8 @@ SRCFILE=/usr/share/imapproxy/imapproxy.conf.default
 
 case "$1" in
     configure)
-        if [ -e /usr/share/debconf/confmodule ]; then
+        if [ -e /usr/share/debconf/confmodule ]
+        then
             db_get imapproxy/imap-server || true
             server_hostname="$RET"
 
@@ -41,7 +43,8 @@ case "$1" in
                 CONFIGURED_PORT=$(perl -ne '/^\s*listen_port\s*(\S+)$/ && print $1' $DESTFILE)
             fi
 
-            if [ "$server_hostname" = "localhost" ]; then
+            if [ "$server_hostname" = "localhost" ]
+            then
                 # change bind port if localhost (#470431)
                 listen_port=${CONFIGURED_PORT:-1143}
             else
@@ -57,7 +60,8 @@ case "$1" in
             ucf --debconf-ok $TMPFILE $DESTFILE
 
             # prevent incorrect time zone config (#436555)
-            if [ ! -f ${chroot_directory}/etc/localtime ]; then
+            if [ ! -f ${chroot_directory}/etc/localtime ]
+            then
                 mkdir ${chroot_directory}/etc || true
                 cp /etc/localtime ${chroot_directory}/etc
             fi
@@ -82,7 +86,8 @@ case "$1" in
 esac
 
 #db_reset imapproxy/imap-server
-if [ -e /usr/share/debconf/confmodule ]; then
+if [ -e /usr/share/debconf/confmodule ]
+then
     db_stop
 fi
 
