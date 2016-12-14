@@ -1,0 +1,21 @@
+#!/bin/sh
+
+set -e
+
+chroot_directory=$(perl -ne '/^\s*chroot_directory\s*(\S+)$/ && print $1' \
+    /etc/imapproxy.conf)
+
+if [ -n "${chroot_directory}" ]
+then
+    mkdir -p "${chroot_directory}"/etc
+
+    if [ -r /etc/localtime ]
+    then
+        if ! cmp -s /etc/localtime "${chroot_directory}"/etc/localtime
+        then
+            cp /etc/localtime "${chroot_directory}"/etc/localtime
+        fi
+    else
+        rm -f "${chroot_directory}"/etc/localtime
+    fi
+fi

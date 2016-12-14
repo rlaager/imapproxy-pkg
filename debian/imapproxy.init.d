@@ -50,6 +50,7 @@ case "$1" in
 		exit 0
 	fi
 	echo -n "Starting $DESC: "
+	/usr/share/imapproxy/prepare-chroot
 	start-stop-daemon --start --quiet --pidfile=$PIDFILE \
 		--exec $DAEMON -- $ARGS
 	sleep 1

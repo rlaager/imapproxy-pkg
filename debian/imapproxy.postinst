@@ -59,16 +59,6 @@ case "$1" in
             chmod 644 $TMPFILE
             ucf --debconf-ok $TMPFILE $DESTFILE
 
-            # prevent incorrect time zone config (#436555)
-            chroot_directory=$(perl -ne '/^\s*chroot_directory\s*(\S+)$/ && print $1' $DESTFILE)
-            if [ -n "${chroot_directory}" ] &&
-               [ -r /etc/localtime ] &&
-               [ ! -f ${chroot_directory}/etc/localtime ]
-            then
-                mkdir -p ${chroot_directory}/etc
-                cp /etc/localtime ${chroot_directory}/etc
-            fi
-
             # register configfile with UCF
             ucfr imapproxy $DESTFILE
 

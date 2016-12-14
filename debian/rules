@@ -74,6 +74,10 @@ install: build
 	perl debian/prepare-config-file < scripts/imapproxy.conf \
 		> debian/imapproxy/usr/share/imapproxy/imapproxy.conf.default
 
+	install -d debian/imapproxy/usr/share/imapproxy
+	install -m 755 debian/prepare-chroot \
+		debian/imapproxy/usr/share/imapproxy
+
 	dh_installexamples
 	chmod 644 $(CURDIR)/debian/imapproxy/usr/share/doc/imapproxy/examples/imapproxy.conf
 
