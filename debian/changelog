@@ -1,3 +1,21 @@
+up-imapproxy (1.2.8~svn20161210-2) unstable; urgency=medium
+
+  [ Jose Luis Tallon ]
+  * New maintainer (Closes: 838071)
+
+  [ Adriano Rafael Gomes ]
+  * Add pt_BR debconf translation (Closes: 770364)
+
+  [ Richard Laager ]
+  * Fix fuzzy pt_BR debconf translation
+  * Cleanup package maintainer scripts
+  * Suppress errors from rmdir in prerm
+  * Lookup the chroot_directory for localtime code
+  * Handle lack of /etc/localtime (Closes: 848004)
+  * Handle changed /etc/localtime
+
+ -- Richard Laager <rlaager@wiktel.com>  Tue, 13 Dec 2016 18:44:17 -0600
+
 up-imapproxy (1.2.8~svn20161210-1) unstable; urgency=medium
 
   [ Peter Eisentraut ]
