@@ -1,3 +1,11 @@
+up-imapproxy (1.2.8~svn20161210-2) unstable; urgency=medium
+
+  [ Jose Luis Tallon ]
+  * Add pre-depends on tzdata, to satisfy piuparts (Closes: #848004)
+    Reported + patch by Adrian Bunk. Thanks!
+
+ -- Jose Luis Tallon <jltallon@adv-solutions.net>  Wed, 14 Dec 2016 00:59:21 +0100
+
 up-imapproxy (1.2.8~svn20161210-1) unstable; urgency=medium
 
   [ Peter Eisentraut ]
