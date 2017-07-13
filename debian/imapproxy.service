@@ -8,3 +8,7 @@ Wants=network-online.target courier-imap.service cyrus-imapd.service dovecot.ser
 Type=forking
 ExecStartPre=/usr/share/imapproxy/prepare-chroot
 ExecStart=/usr/sbin/imapproxyd -f /etc/imapproxy.conf
+PIDFile=/run/imapproxy.pid
+
+[Install]
+WantedBy=multi-user.target
