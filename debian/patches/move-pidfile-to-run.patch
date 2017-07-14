@@ -1,0 +1,19 @@
+Description: Move pidfile to /run
+ Debian is converting to /run.  This particular transition (from /var/run to
+ /run) is currently optional.
+ .
+ See: https://wiki.debian.org/ReleaseGoals/RunDirectory
+Author: Richard Laager <rlaager@wiktel.com>
+Forwarded: no
+Last-Update: 2017-07-13
+--- a/include/imapproxy.h
++++ b/include/imapproxy.h
+@@ -182,7 +182,7 @@
+ #define DEFAULT_CONFIG_FILE     "/etc/imapproxy.conf"
+ #endif
+ #ifndef DEFAULT_PID_FILE
+-#define DEFAULT_PID_FILE       "/var/run/imapproxy.pid"
++#define DEFAULT_PID_FILE       "/run/imapproxy.pid"
+ #endif
+ 
+ #define LITERAL_PASSWORD        1
