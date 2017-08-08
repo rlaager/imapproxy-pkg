@@ -1,3 +1,11 @@
+up-imapproxy (1.2.8~svn20161210-2+deb9u1) stretch; urgency=medium
+
+  * Correct the service file.
+    Thanks to Marc Dequènes (Duck) (Closes: 868150)
+  * Move the pidfile to /run
+
+ -- Richard Laager <rlaager@wiktel.com>  Mon, 07 Aug 2017 23:58:28 -0500
+
 up-imapproxy (1.2.8~svn20161210-2) unstable; urgency=medium
 
   [ Jose Luis Tallon ]
