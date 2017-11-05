@@ -1,6 +1,6 @@
 /*
 **
-** Copyright (c) 2010-2016 The SquirrelMail Project Team
+** Copyright (c) 2010-2017 The SquirrelMail Project Team
 ** Copyright (c) 2002-2010 Dave McMurtrie
 **
 ** Licensed under the GNU GPL. For full terms see the file COPYING.
@@ -21,7 +21,7 @@
 **
 **  Version:
 **
-**      $Id: imapproxy.h 14573 2016-09-14 02:55:23Z pdontthink $
+**      $Id: imapproxy.h 14647 2017-01-27 20:53:57Z pdontthink $
 **
 **  Modification History:
 **
