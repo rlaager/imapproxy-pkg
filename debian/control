@@ -2,9 +2,13 @@ Source: up-imapproxy
 Section: mail
 Priority: optional
 Maintainer: Richard Laager <rlaager@wiktel.com>
-Uploaders: Jose Luis Tallon <jltallon@adv-solutions.net>, tony mancill <tmancill@debian.org>
-Build-Depends: debhelper (>= 10), po-debconf (>= 0.8.2),
-	libwrap0-dev, libncurses-dev, libssl-dev
+Uploaders: Jose Luis Tallon <jltallon@adv-solutions.net>,
+           tony mancill <tmancill@debian.org>
+Build-Depends: debhelper (>= 10),
+               libncurses-dev,
+               libssl-dev,
+               libwrap0-dev,
+               po-debconf (>= 0.8.2)
 Homepage: http://www.imapproxy.org
 Standards-Version: 4.1.1
 Vcs-Browser: https://github.com/rlaager/imapproxy-pkg
@@ -12,7 +16,10 @@ Vcs-Git: https://github.com/rlaager/imapproxy-pkg.git
 
 Package: imapproxy
 Architecture: any
-Depends: lsb-base (>= 3.2-13), ${shlibs:Depends}, ${misc:Depends}, ucf (>= 0.28)
+Depends: lsb-base (>= 3.2-13),
+         ucf (>= 0.28),
+         ${misc:Depends},
+         ${shlibs:Depends}
 Description: IMAP protocol proxy
  IMAP Proxy proxies IMAP transactions between an IMAP client and an IMAP
  server. The general idea is that the client should never know that it is

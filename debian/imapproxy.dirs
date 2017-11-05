@@ -1,8 +1,8 @@
 etc
 etc/default
 usr/sbin
-var/lib/imapproxy/chroot
-usr/share/imapproxy
 usr/share/doc/imapproxy
 usr/share/doc/imapproxy/examples
+usr/share/imapproxy
+var/lib/imapproxy/chroot
 var/run

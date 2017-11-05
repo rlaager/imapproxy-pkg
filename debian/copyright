@@ -1,4 +1,4 @@
-This package was debianized by Jose Luis Tallon <jltallon@adv-solutions.net> 
+This package was debianized by Jose Luis Tallon <jltallon@adv-solutions.net>
 on Fri, 12 Mar 2004 21:01:25 +0100.
 
 It was downloaded from http://www.imapproxy.org
@@ -30,5 +30,5 @@ License can be found in /usr/share/common-licenses/.
 
 
 Debian packaging Copyright (C) 2004-2008 Jose Luis Tallon.
-Released under the GPL-2 license, which can be found 
+Released under the GPL-2 license, which can be found
 at /usr/share/common-licenses/ on Debian systems.
