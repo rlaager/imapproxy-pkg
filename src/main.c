@@ -1,6 +1,6 @@
 /*
 **
-** Copyright (c) 2010-2016 The SquirrelMail Project Team
+** Copyright (c) 2010-2017 The SquirrelMail Project Team
 ** Copyright (c) 2002-2010 Dave McMurtrie
 **
 ** Licensed under the GNU GPL. For full terms see the file COPYING.
@@ -23,7 +23,7 @@
 **
 **  Version:
 **
-**      $Id: main.c 14573 2016-09-14 02:55:23Z pdontthink $
+**      $Id: main.c 14647 2017-01-27 20:53:57Z pdontthink $
 **
 **  Modification History:
 **
@@ -187,8 +187,8 @@
 */
 
 
-static char *sourceRevision = "$Revision: 14573 $";
-static char *sourceVersion = "$Id: main.c 14573 2016-09-14 02:55:23Z pdontthink $";
+static char *sourceRevision = "$Revision: 14647 $";
+static char *sourceVersion = "$Id: main.c 14647 2017-01-27 20:53:57Z pdontthink $";
 static char *sourceAuthor = "$Author: pdontthink $";
 
 #define _REENTRANT
@@ -1417,7 +1417,7 @@ static void SetBannerAndCapability( void )
     
     if ( strncasecmp( itd.ReadBuf, IMAP_TAGGED_OK, strlen(IMAP_TAGGED_OK) ) )
     {
-	syslog(LOG_ERR, "%s: Received non-OK tagged reponse from IMAP server on CAPABILITY command -- exiting.", fn );
+	syslog(LOG_ERR, "%s: Received non-OK tagged response from IMAP server on CAPABILITY command -- exiting.", fn );
 	close( itd.conn->sd );
 	exit( 1 );
     }
@@ -1497,7 +1497,7 @@ static void SetBannerAndCapability( void )
 
 		if ( strncasecmp( itd.ReadBuf, IMAP_TAGGED_OK, strlen(IMAP_TAGGED_OK) ) )
 		{
-		    syslog(LOG_ERR, "%s: Received non-OK tagged reponse from imap server on CAPABILITY command -- exiting.", fn );
+		    syslog(LOG_ERR, "%s: Received non-OK tagged response from imap server on CAPABILITY command -- exiting.", fn );
 		    close( itd.conn->sd );
 		    exit( 1 );
 		}
