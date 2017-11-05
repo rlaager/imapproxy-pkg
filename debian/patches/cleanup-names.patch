@@ -2,7 +2,7 @@ Description: Cleanup names
  The name of this package in Debian is imapproxy.
 Author: Richard Laager <rlaager@wiktel.com>
 Forwarded: not-needed
-Last-Update: 2016-11-30
+Last-Update: 2017-11-05
 --- a/README
 +++ b/README
 @@ -4,7 +4,7 @@
@@ -184,24 +184,23 @@ Last-Update: 2016-11-30
  ## Lines beginning with a '#' sign are treated as comments and will be
  ## ignored.  Each line to be processed must be a space delimited
  ## keyword/value pair.  
-@@ -128,11 +128,11 @@
+@@ -128,10 +128,11 @@
  ## syslog_prioritymask
  ##
  ## This configuration option is provided as a way to limit the verbosity
 -## of squirrelmail-imap_proxy.  If no value is specified, it will default
 -## to no priority mask and you'll see all possible log messages.  Any of
--## the possible priority values listed in the syslog(3C) manpage may be
--## used here.  By default, I've left this commented out so you will see
--## all possible log messages.
+-## the possible priority values listed in the syslog(3) manpage may be
+-## used here.  By default, you will see all possible log messages.
 +## of imapproxy.  If no value is specified, it will default to no priority
 +## mask and you'll see all possible log messages.  Any of the possible
-+## priority values listed in the syslog(3C) manpage may be used here.  By
++## priority values listed in the syslog(3) manpage may be used here.  By
 +## default, I've left this commented out so you will see all possible log
 +## messages.
  #
  #syslog_prioritymask LOG_WARNING
  
-@@ -150,8 +150,8 @@
+@@ -149,8 +150,8 @@
  ## enable_select_cache
  ##
  ## This configuration option allows you to turn select caching on or off.
@@ -212,7 +211,7 @@ Last-Update: 2016-11-30
  #
  enable_select_cache no
  
-@@ -159,8 +159,8 @@
+@@ -158,8 +159,8 @@
  #
  ## foreground_mode
  ##
@@ -223,7 +222,7 @@ Last-Update: 2016-11-30
  #
  foreground_mode no
  
-@@ -168,8 +168,8 @@
+@@ -167,8 +168,8 @@
  #
  ## force_tls
  ##
@@ -234,7 +233,7 @@ Last-Update: 2016-11-30
  #
  force_tls no
  
-@@ -177,10 +177,9 @@
+@@ -176,10 +177,9 @@
  #
  ## chroot_directory
  ##
@@ -248,7 +247,7 @@ Last-Update: 2016-11-30
  #
  #chroot_directory /var/empty
  
-@@ -205,8 +204,7 @@
+@@ -204,8 +204,7 @@
  #
  ## enable_admin_commands
  ##
@@ -260,7 +259,7 @@ Last-Update: 2016-11-30
  
 --- a/src/main.c
 +++ b/src/main.c
-@@ -714,7 +714,7 @@
+@@ -715,7 +715,7 @@
  	exit( 1 );
      }
  
@@ -269,7 +268,7 @@ Last-Update: 2016-11-30
  
      /*
       * Main server loop
-@@ -1003,7 +1003,7 @@
+@@ -1004,7 +1004,7 @@
  
      /* detach from our parent if necessary */
      // NOTE: When started under systemd, the parent PID is already 1, so
@@ -278,7 +277,7 @@ Last-Update: 2016-11-30
      //       to start in foreground mode. I'm commenting it out, hoping
      //       it doesn't cause issues in other contexts
      if (/*! (getppid() == 1) &&*/ ( ! PC_Struct.foreground_mode ) )
-@@ -1081,7 +1081,7 @@
+@@ -1082,7 +1082,7 @@
  /*++
   * Function:	ParseBannerAndCapability
   *
@@ -287,7 +286,7 @@ Last-Update: 2016-11-30
   *              support from a banner line or a capability line.
   *
   * Parameters:	char * - Buffer for storing the cleaned up string.
-@@ -1264,7 +1264,7 @@
+@@ -1265,7 +1265,7 @@
      
      /*
       * Add a 'XIMAPPROXY' CAPABILITY response to indicate that the

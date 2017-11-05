@@ -1,17 +1,16 @@
 Description: Remove unused variables
 Author: Richard Laager <rlaager@wiktel.com>
 Forwarded: https://sourceforge.net/p/squirrelmail/mailman/message/35526927/
-Last-Update: 2016-12-10
+Last-Update: 2017-11-05
 --- a/src/main.c
 +++ b/src/main.c
-@@ -186,10 +186,11 @@
- **
+@@ -187,9 +187,11 @@
  */
  
--
+ 
 +#if 0
- static char *sourceRevision = "$Revision: 14573 $";
- static char *sourceVersion = "$Id: main.c 14573 2016-09-14 02:55:23Z pdontthink $";
+ static char *sourceRevision = "$Revision: 14647 $";
+ static char *sourceVersion = "$Id: main.c 14647 2017-01-27 20:53:57Z pdontthink $";
  static char *sourceAuthor = "$Author: pdontthink $";
 +#endif
  
