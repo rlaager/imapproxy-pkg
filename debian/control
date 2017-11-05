@@ -3,8 +3,8 @@ Section: mail
 Priority: optional
 Maintainer: Richard Laager <rlaager@wiktel.com>
 Uploaders: Jose Luis Tallon <jltallon@adv-solutions.net>, tony mancill <tmancill@debian.org>
-Build-Depends: autotools-dev, debhelper (>= 9), po-debconf (>= 0.8.2),
-	libwrap0-dev, libncurses-dev, libssl-dev, dh-systemd
+Build-Depends: debhelper (>= 10), po-debconf (>= 0.8.2),
+	libwrap0-dev, libncurses-dev, libssl-dev
 Homepage: http://www.imapproxy.org
 Standards-Version: 4.1.1
 Vcs-Browser: https://github.com/rlaager/imapproxy-pkg
