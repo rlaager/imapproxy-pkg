@@ -1,3 +1,13 @@
+up-imapproxy (1.2.8~svn20171105-1) unstable; urgency=medium
+
+  * Imported Upstream version 1.2.8~svn20171105
+  * Drop upstreamed changes
+  * Bump Standards-Version to 4.1.1 (no changes)
+  * Update to debhelper 10
+  * Run wrap-and-sort
+
+ -- Richard Laager <rlaager@wiktel.com>  Sun, 05 Nov 2017 02:20:25 -0600
+
 up-imapproxy (1.2.8~svn20161210-3) unstable; urgency=medium
 
   * Correct the service file.
